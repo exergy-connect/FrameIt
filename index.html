@@ -1,0 +1,641 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Exergy Frame</title>
+  <link rel="icon" href="extension/assets/favicon.ico" sizes="any" />
+  <link rel="icon" href="extension/assets/favicon.svg" type="image/svg+xml" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;600;700&family=Sora:wght@500;700&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg0: #0f1419;
+      --bg1: #1a2430;
+      --text: #e8eef5;
+      --muted: #9aafc2;
+      --line: rgba(197, 218, 240, 0.22);
+      --accent0: #c5daf0;
+      --accent1: #5a8ec4;
+      --accent2: #1e3a58;
+      --rec: #e25555;
+      --ok: #6ecf9a;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      min-height: 100vh;
+      display: grid;
+      place-items: center;
+      color: var(--text);
+      font-family: "Outfit", sans-serif;
+      overflow: hidden;
+      background:
+        radial-gradient(ellipse at 18% 12%, rgba(90, 142, 196, 0.28) 0%, transparent 48%),
+        radial-gradient(ellipse at 88% 78%, rgba(30, 58, 88, 0.55) 0%, transparent 50%),
+        linear-gradient(165deg, var(--bg1) 0%, var(--bg0) 100%);
+    }
+
+    .stage {
+      position: relative;
+      width: min(92vw, 760px);
+      aspect-ratio: 16 / 11;
+      max-height: 92vh;
+    }
+
+    .brand {
+      position: absolute;
+      top: 0;
+      left: 50%;
+      transform: translateX(-50%);
+      display: flex;
+      align-items: center;
+      gap: 0.7rem;
+      z-index: 2;
+      opacity: 0;
+      transition: opacity 0.4s ease;
+    }
+
+    .brand.visible { opacity: 1; }
+
+    .brand img {
+      width: 42px;
+      height: 42px;
+      border-radius: 10px;
+      background: #fff;
+      box-shadow: 0 6px 18px rgba(0, 0, 0, 0.35);
+    }
+
+    .brand h1 {
+      font-family: "Sora", sans-serif;
+      font-size: clamp(1.35rem, 3.6vw, 1.85rem);
+      font-weight: 700;
+      letter-spacing: 0.01em;
+      background: linear-gradient(120deg, var(--accent0), var(--accent1) 55%, #7aa8d4);
+      -webkit-background-clip: text;
+      background-clip: text;
+      color: transparent;
+      white-space: nowrap;
+    }
+
+    .phase {
+      position: absolute;
+      top: 8.5%;
+      left: 50%;
+      transform: translateX(-50%);
+      font-size: clamp(0.95rem, 2.4vw, 1.15rem);
+      font-weight: 600;
+      color: var(--muted);
+      text-align: center;
+      white-space: nowrap;
+      opacity: 0;
+      transition: opacity 0.35s ease;
+      z-index: 2;
+    }
+
+    .phase.visible { opacity: 1; }
+
+    .glass {
+      position: absolute;
+      inset: 16% 8% 10% 8%;
+      border-radius: 16px;
+      background:
+        linear-gradient(160deg, rgba(26, 36, 48, 0.92) 0%, rgba(15, 20, 25, 0.96) 100%);
+      border: 1px solid var(--line);
+      box-shadow:
+        0 1px 0 rgba(197, 218, 240, 0.08) inset,
+        0 24px 48px rgba(0, 0, 0, 0.45);
+      overflow: hidden;
+    }
+
+    .glass::before {
+      content: "";
+      position: absolute;
+      inset: 0;
+      background:
+        radial-gradient(ellipse at 20% 0%, rgba(197, 218, 240, 0.08), transparent 45%);
+      pointer-events: none;
+    }
+
+    svg.frame {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      overflow: visible;
+    }
+
+    .stroke {
+      fill: none;
+      stroke: var(--accent0);
+      stroke-width: 2.2;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+      stroke-dasharray: 1;
+      stroke-dashoffset: 1;
+      opacity: 0;
+    }
+
+    .stroke.thin {
+      stroke-width: 1.5;
+      stroke: var(--muted);
+    }
+
+    .stroke.soft {
+      stroke: rgba(197, 218, 240, 0.45);
+      stroke-width: 1.4;
+    }
+
+    .stroke.accent {
+      stroke: var(--accent1);
+      stroke-width: 2.4;
+    }
+
+    .stroke.rec {
+      stroke: var(--rec);
+      stroke-width: 2.6;
+    }
+
+    .stroke.ok {
+      stroke: var(--ok);
+      stroke-width: 2.4;
+    }
+
+    .fill-fade {
+      opacity: 0;
+      transition: opacity 0.35s ease;
+    }
+
+    .fill-fade.visible { opacity: 1; }
+
+    .label {
+      font-family: "Outfit", sans-serif;
+      font-size: 15px;
+      font-weight: 600;
+      fill: var(--accent0);
+      opacity: 0;
+    }
+
+    .label.muted {
+      fill: var(--muted);
+      font-weight: 500;
+      font-size: 13px;
+    }
+
+    .label.visible {
+      animation: popLabel 0.4s cubic-bezier(0.34, 1.35, 0.64, 1) forwards;
+    }
+
+    .countdown-num {
+      font-family: "Sora", sans-serif;
+      font-size: 54px;
+      font-weight: 700;
+      fill: var(--text);
+      opacity: 0;
+      text-anchor: middle;
+      dominant-baseline: central;
+    }
+
+    .countdown-num.visible {
+      animation: countPop 0.55s cubic-bezier(0.34, 1.4, 0.64, 1) forwards;
+    }
+
+    .control {
+      position: absolute;
+      bottom: 0;
+      left: 50%;
+      transform: translateX(-50%);
+      appearance: none;
+      border: 1px solid var(--line);
+      background: linear-gradient(120deg, var(--accent0), var(--accent1));
+      color: var(--bg0);
+      font-family: "Outfit", sans-serif;
+      font-size: 0.95rem;
+      font-weight: 700;
+      padding: 0.45rem 1.25rem;
+      border-radius: 999px;
+      cursor: pointer;
+      opacity: 0;
+      pointer-events: none;
+      box-shadow: 0 8px 20px rgba(0, 0, 0, 0.3);
+      transition: transform 0.15s ease, filter 0.15s ease, opacity 0.3s ease;
+    }
+
+    .control:hover {
+      filter: brightness(1.08);
+      transform: translateX(-50%) translateY(-1px);
+    }
+
+    .control.revealed {
+      opacity: 1;
+      pointer-events: auto;
+    }
+
+    @keyframes popLabel {
+      0%   { opacity: 0; transform: translateY(4px); }
+      100% { opacity: 1; transform: translateY(0); }
+    }
+
+    @keyframes countPop {
+      0%   { opacity: 0; transform: scale(0.55); }
+      70%  { opacity: 1; transform: scale(1.08); }
+      100% { opacity: 1; transform: scale(1); }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      .stroke { stroke-dashoffset: 0; opacity: 1; }
+      .label, .brand, .phase, .control, .fill-fade, .countdown-num { opacity: 1; }
+      .countdown-num { display: none; }
+    }
+  </style>
+</head>
+<body>
+  <div class="stage" id="root">
+    <div class="brand" id="brand">
+      <img src="extension/assets/exergy_connect_logo.png" alt="Exergy Connect" width="42" height="42" />
+      <h1>Exergy Frame</h1>
+    </div>
+    <p class="phase" id="phaseTitle"></p>
+    <div class="glass" aria-hidden="true"></div>
+    <svg class="frame" id="svg" viewBox="0 0 760 520" preserveAspectRatio="xMidYMid meet" aria-hidden="true"></svg>
+    <button class="control" id="replay" type="button">replay</button>
+  </div>
+
+  <script>
+  (function () {
+    const svg = document.getElementById("svg");
+    const phaseTitle = document.getElementById("phaseTitle");
+    const brand = document.getElementById("brand");
+    const replayBtn = document.getElementById("replay");
+    const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+    const registry = {
+      strokes: {},
+      fills: {},
+      labels: {},
+      countdown: null,
+      pulse: null,
+    };
+
+    function svgEl(name, attrs) {
+      const el = document.createElementNS("http://www.w3.org/2000/svg", name);
+      for (const [k, v] of Object.entries(attrs || {})) el.setAttribute(k, v);
+      return el;
+    }
+
+    function addStroke(id, d, cls = "stroke") {
+      const el = svgEl("path", {
+        id,
+        class: cls,
+        pathLength: "1",
+        d,
+      });
+      svg.appendChild(el);
+      registry.strokes[id] = el;
+      return el;
+    }
+
+    function addLabel(id, text, x, y, cls = "label") {
+      const el = svgEl("text", { id, class: cls, x: String(x), y: String(y) });
+      el.textContent = text;
+      svg.appendChild(el);
+      registry.labels[id] = el;
+      return el;
+    }
+
+    // Browser chrome
+    const win = { x: 150, y: 120, w: 460, h: 290 };
+    addStroke(
+      "chrome",
+      `M ${win.x + 14} ${win.y}
+       H ${win.x + win.w - 14}
+       Q ${win.x + win.w} ${win.y} ${win.x + win.w} ${win.y + 14}
+       V ${win.y + win.h - 14}
+       Q ${win.x + win.w} ${win.y + win.h} ${win.x + win.w - 14} ${win.y + win.h}
+       H ${win.x + 14}
+       Q ${win.x} ${win.y + win.h} ${win.x} ${win.y + win.h - 14}
+       V ${win.y + 14}
+       Q ${win.x} ${win.y} ${win.x + 14} ${win.y} Z`,
+      "stroke accent",
+    );
+    addStroke("toolbar", `M ${win.x} ${win.y + 36} H ${win.x + win.w}`, "stroke soft");
+    addStroke("dot1", `M ${win.x + 22} ${win.y + 18} a 4 4 0 1 0 0.01 0`, "stroke thin");
+    addStroke("dot2", `M ${win.x + 38} ${win.y + 18} a 4 4 0 1 0 0.01 0`, "stroke thin");
+    addStroke("dot3", `M ${win.x + 54} ${win.y + 18} a 4 4 0 1 0 0.01 0`, "stroke thin");
+
+    // Page content lines
+    [
+      [180, 190, 300],
+      [180, 214, 250],
+      [180, 238, 280],
+      [180, 262, 220],
+      [180, 286, 260],
+    ].forEach(([x, y, w], i) => {
+      addStroke(`line${i}`, `M ${x} ${y} H ${x + w}`, "stroke thin");
+    });
+
+    // Extension mark (toolbar icon)
+    const icon = { cx: 560, cy: 138, r: 14 };
+    addStroke(
+      "extIcon",
+      `M ${icon.cx - icon.r} ${icon.cy}
+       a ${icon.r} ${icon.r} 0 1 0 ${icon.r * 2} 0
+       a ${icon.r} ${icon.r} 0 1 0 ${-icon.r * 2} 0`,
+      "stroke accent",
+    );
+    const inf = svgEl("path", {
+      id: "infMark",
+      class: "fill-fade",
+      fill: "none",
+      stroke: "url(#brandGrad)",
+      "stroke-width": "2.4",
+      "stroke-linecap": "round",
+      d: `M ${icon.cx} ${icon.cy}
+          C ${icon.cx - 4} ${icon.cy - 7} ${icon.cx - 10} ${icon.cy - 9} ${icon.cx - 12} ${icon.cy - 5}
+          C ${icon.cx - 14} ${icon.cy - 1} ${icon.cx - 12} ${icon.cy + 6} ${icon.cx - 8} ${icon.cy + 6}
+          C ${icon.cx - 4} ${icon.cy + 6} ${icon.cx - 1} ${icon.cy + 2} ${icon.cx} ${icon.cy}
+          C ${icon.cx + 1} ${icon.cy + 2} ${icon.cx + 4} ${icon.cy + 6} ${icon.cx + 8} ${icon.cy + 6}
+          C ${icon.cx + 12} ${icon.cy + 6} ${icon.cx + 14} ${icon.cy - 1} ${icon.cx + 12} ${icon.cy - 5}
+          C ${icon.cx + 10} ${icon.cy - 9} ${icon.cx + 4} ${icon.cy - 7} ${icon.cx} ${icon.cy}`,
+    });
+    const defs = svgEl("defs");
+    const grad = svgEl("linearGradient", {
+      id: "brandGrad",
+      x1: String(icon.cx - 14),
+      y1: String(icon.cy - 8),
+      x2: String(icon.cx + 14),
+      y2: String(icon.cy + 8),
+      gradientUnits: "userSpaceOnUse",
+    });
+    grad.appendChild(svgEl("stop", { offset: "0%", "stop-color": "#c5daf0" }));
+    grad.appendChild(svgEl("stop", { offset: "45%", "stop-color": "#5a8ec4" }));
+    grad.appendChild(svgEl("stop", { offset: "100%", "stop-color": "#1e3a58" }));
+    defs.appendChild(grad);
+    svg.insertBefore(defs, svg.firstChild);
+    svg.appendChild(inf);
+    registry.fills.infMark = inf;
+
+    // Countdown ring + number
+    addStroke(
+      "countRing",
+      `M ${380 - 42} 275 a 42 42 0 1 0 84 0 a 42 42 0 1 0 -84 0`,
+      "stroke accent",
+    );
+    const countNum = svgEl("text", {
+      id: "countNum",
+      class: "countdown-num",
+      x: "380",
+      y: "275",
+    });
+    countNum.textContent = "3";
+    svg.appendChild(countNum);
+    registry.countdown = countNum;
+
+    // Session bar
+    const bar = { x: 210, y: 360, w: 340, h: 36 };
+    addStroke(
+      "sessionBar",
+      `M ${bar.x + 10} ${bar.y}
+       H ${bar.x + bar.w - 10}
+       Q ${bar.x + bar.w} ${bar.y} ${bar.x + bar.w} ${bar.y + 10}
+       V ${bar.y + bar.h - 10}
+       Q ${bar.x + bar.w} ${bar.y + bar.h} ${bar.x + bar.w - 10} ${bar.y + bar.h}
+       H ${bar.x + 10}
+       Q ${bar.x} ${bar.y + bar.h} ${bar.x} ${bar.y + bar.h - 10}
+       V ${bar.y + 10}
+       Q ${bar.x} ${bar.y} ${bar.x + 10} ${bar.y} Z`,
+      "stroke",
+    );
+    addStroke(
+      "recDot",
+      `M ${bar.x + 22} ${bar.y + 18} a 6 6 0 1 0 0.01 0`,
+      "stroke rec",
+    );
+    addLabel("timerLabel", "00:12", bar.x + 40, bar.y + 23, "label muted");
+    addLabel("stopLabel", "Stop & save", bar.x + 210, bar.y + 23, "label");
+
+    // Download / file
+    const file = { x: 330, y: 210, w: 100, h: 120 };
+    addStroke(
+      "file",
+      `M ${file.x} ${file.y + 18}
+       V ${file.y + file.h}
+       H ${file.x + file.w}
+       V ${file.y + 36}
+       L ${file.x + file.w - 28} ${file.y}
+       H ${file.x}
+       V ${file.y + 18}
+       M ${file.x + file.w - 28} ${file.y}
+       V ${file.y + 36}
+       H ${file.x + file.w}`,
+      "stroke ok",
+    );
+    addLabel("fileLabel", "session.mp4", file.x + 8, file.y + file.h + 28, "label");
+    addLabel("tagCapture", "Capturing browser context", 180, 178, "label muted");
+    addLabel("tagCountdown", "Countdown → Record", 455, 250, "label muted");
+    addLabel("tagSave", "downloads to your machine", 455, 340, "label muted");
+
+    // Soft page fill behind content (revealed with browser)
+    const pageFill = svgEl("rect", {
+      id: "pageFill",
+      class: "fill-fade",
+      x: String(win.x + 1),
+      y: String(win.y + 37),
+      width: String(win.w - 2),
+      height: String(win.h - 38),
+      fill: "rgba(197, 218, 240, 0.04)",
+      rx: "0",
+    });
+    svg.insertBefore(pageFill, registry.strokes.toolbar);
+    registry.fills.pageFill = pageFill;
+
+    const TIME_SCALE = 1.2; // 20% slower narrative
+
+    function wait(ms) {
+      return new Promise((r) => setTimeout(r, ms * TIME_SCALE));
+    }
+
+    function easeInOutCubic(t) {
+      return t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
+    }
+
+    function ink(el, duration) {
+      return new Promise((resolve) => {
+        el.style.opacity = "1";
+        el.style.strokeDasharray = "1";
+        el.style.strokeDashoffset = "1";
+        const scaled = duration * TIME_SCALE;
+        const t0 = performance.now();
+        function frame(now) {
+          const t = easeInOutCubic(Math.min(1, (now - t0) / scaled));
+          el.style.strokeDashoffset = String(1 - t);
+          if (t < 1) requestAnimationFrame(frame);
+          else resolve();
+        }
+        requestAnimationFrame(frame);
+      });
+    }
+
+    function setTitle(text) {
+      if (!text) return Promise.resolve();
+      phaseTitle.classList.remove("visible");
+      return wait(180).then(() => {
+        phaseTitle.textContent = text;
+        phaseTitle.classList.add("visible");
+        return wait(280);
+      });
+    }
+
+    function showLabel(id) {
+      const el = registry.labels[id];
+      if (!el) return;
+      el.style.opacity = "";
+      el.classList.remove("visible");
+      void el.offsetWidth;
+      el.classList.add("visible");
+    }
+
+    function hideLabel(id) {
+      const el = registry.labels[id];
+      if (!el) return;
+      el.classList.remove("visible");
+      el.style.opacity = "0";
+    }
+
+    function showFill(id) {
+      const el = registry.fills[id];
+      if (el) el.classList.add("visible");
+    }
+
+    function hideFill(id) {
+      const el = registry.fills[id];
+      if (el) el.classList.remove("visible");
+    }
+
+    async function showCountdown() {
+      const nums = ["3", "2", "1"];
+      registry.strokes.countRing.style.opacity = "1";
+      await ink(registry.strokes.countRing, 500);
+      for (const n of nums) {
+        registry.countdown.textContent = n;
+        registry.countdown.classList.remove("visible");
+        void registry.countdown.offsetWidth;
+        registry.countdown.classList.add("visible");
+        await wait(520);
+      }
+      registry.countdown.classList.remove("visible");
+      registry.countdown.style.opacity = "0";
+      registry.strokes.countRing.style.opacity = "0";
+    }
+
+    function reset() {
+      Object.values(registry.strokes).forEach((el) => {
+        el.style.opacity = "0";
+        el.style.strokeDashoffset = "1";
+      });
+      Object.values(registry.labels).forEach((el) => {
+        el.classList.remove("visible");
+        el.style.opacity = "0";
+      });
+      Object.values(registry.fills).forEach((el) => el.classList.remove("visible"));
+      registry.countdown.classList.remove("visible");
+      registry.countdown.style.opacity = "0";
+      phaseTitle.classList.remove("visible");
+      phaseTitle.textContent = "";
+      brand.classList.remove("visible");
+      replayBtn.classList.remove("revealed");
+    }
+
+    async function runTimeline() {
+      reset();
+
+      if (reduced) {
+        Object.values(registry.strokes).forEach((el) => {
+          el.style.opacity = "1";
+          el.style.strokeDashoffset = "0";
+        });
+        Object.values(registry.labels).forEach((el) => {
+          el.style.opacity = "1";
+        });
+        Object.values(registry.fills).forEach((el) => el.classList.add("visible"));
+        brand.classList.add("visible");
+        phaseTitle.textContent = "Capture context, not just content.";
+        phaseTitle.classList.add("visible");
+        replayBtn.classList.add("revealed");
+        return;
+      }
+
+      await wait(180);
+      brand.classList.add("visible");
+      await wait(400);
+
+      await setTitle("Your tab is the stage…");
+      await ink(registry.strokes.chrome, 900);
+      showFill("pageFill");
+      await ink(registry.strokes.toolbar, 280);
+      await Promise.all([
+        ink(registry.strokes.dot1, 180),
+        ink(registry.strokes.dot2, 180),
+        ink(registry.strokes.dot3, 180),
+      ]);
+      for (let i = 0; i < 5; i++) {
+        await ink(registry.strokes[`line${i}`], 220);
+      }
+      showLabel("tagCapture");
+      await wait(500);
+
+      await setTitle("Start a session from the toolbar");
+      await ink(registry.strokes.extIcon, 500);
+      showFill("infMark");
+      await wait(650);
+
+      // Clear page lines for countdown focus
+      for (let i = 0; i < 5; i++) {
+        registry.strokes[`line${i}`].style.opacity = "0.15";
+      }
+      hideLabel("tagCapture");
+
+      await setTitle("A brief countdown — then recording begins");
+      showLabel("tagCountdown");
+      await showCountdown();
+      hideLabel("tagCountdown");
+
+      await setTitle("Work as usual. A session bar keeps time.");
+      await ink(registry.strokes.sessionBar, 700);
+      await ink(registry.strokes.recDot, 320);
+      showLabel("timerLabel");
+      showLabel("stopLabel");
+      await wait(900);
+
+      await setTitle("Stop & save — your session downloads as MP4");
+      // Dim session UI, reveal file
+      registry.strokes.sessionBar.style.opacity = "0.2";
+      registry.strokes.recDot.style.opacity = "0.2";
+      hideLabel("timerLabel");
+      hideLabel("stopLabel");
+      for (let i = 0; i < 5; i++) {
+        registry.strokes[`line${i}`].style.opacity = "0.08";
+      }
+      await ink(registry.strokes.file, 900);
+      showLabel("fileLabel");
+      showLabel("tagSave");
+      await wait(700);
+
+      await setTitle("Capture context, not just content.");
+      replayBtn.classList.add("revealed");
+    }
+
+    replayBtn.addEventListener("click", runTimeline);
+
+    if (document.fonts && document.fonts.ready) {
+      document.fonts.ready.then(() => requestAnimationFrame(runTimeline));
+    } else {
+      requestAnimationFrame(runTimeline);
+    }
+  })();
+  </script>
+</body>
+</html>
