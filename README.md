@@ -10,7 +10,7 @@ Exergy ∞ xFrame records the current browser tab—including video and tab audi
 
 Built on standard browser capabilities, xFrame stays small, fast, and easy to understand.
 
-An animated explainer is available in [`index.html`](https://exergy-connect.github.io/FrameIt/).
+An animated explainer is available in [`index.html`](https://exergy-connect.github.io/xFrame-plugin/).
 
 ## Why xFrame?
 
