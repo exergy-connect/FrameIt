@@ -50,7 +50,7 @@ Typical recordings are approximately **0.3–1 MB/s** (about **18–60 MB/min**)
 
 **Less is different.**
 
-Rather than capturing everything, Exergy ∞ xFrame lets you focus on what matters.
+Rather than capturing everything, Exergy ∞ xFrame helps you focus on what matters.
 
 **Communicate with clear intent.**
 
