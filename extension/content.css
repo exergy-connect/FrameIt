@@ -36,8 +36,7 @@
   width: 56px;
   height: 56px;
   margin: 0 auto 12px;
-  background: #fff;
-  object-fit: contain;
+  object-fit: cover;
 }
 
 .frameit-countdown__brand {
@@ -69,8 +68,7 @@
   right: 16px;
   width: 48px;
   height: 48px;
-  background: #fff;
-  object-fit: contain;
+  object-fit: cover;
   pointer-events: none;
   box-shadow: 0 6px 18px rgba(0, 0, 0, 0.28);
 }
