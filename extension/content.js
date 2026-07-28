@@ -87,7 +87,7 @@
             width="56"
             height="56"
           />
-          <div class="frameit-countdown__brand">Exergy ∞ FrameIt</div>
+          <div class="frameit-countdown__brand">Exergy ∞ Frame</div>
           <div class="frameit-countdown__number" aria-live="polite">3</div>
           <div class="frameit-countdown__label">Starting capture...</div>
         </div>
@@ -147,7 +147,7 @@
     bar.innerHTML = `
       <div class="frameit-session-bar__left">
         <span class="frameit-session-bar__dot" aria-hidden="true"></span>
-        <span class="frameit-session-bar__title">Exergy ∞ FrameIt</span>
+        <span class="frameit-session-bar__title">Exergy ∞ Frame</span>
         <span class="frameit-session-bar__time" aria-live="polite">00:00</span>
       </div>
       <div class="frameit-session-bar__controls">

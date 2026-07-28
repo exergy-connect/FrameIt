@@ -1,8 +1,8 @@
-# Exergy ∞ FrameIt
+# Exergy ∞ Frame
 
 <img src="exergy_connect_logo.png" alt="Exergy Connect" width="72" height="72" />
 
-**Exergy ∞ FrameIt** is a minimal Chrome extension that captures an MP4 (or WebM fallback) of the current tab’s web session: a brief countdown, a session bar with a live timer, then Stop & save to Downloads.
+**Exergy ∞ Frame** is a minimal Chrome extension that captures an MP4 (or WebM fallback) of the current tab’s web session: a brief countdown, a session bar with a live timer, then Stop & save to Downloads.
 
 ## Load unpacked
 
@@ -13,7 +13,7 @@
 ## Usage
 
 1. Open the website tab you want to capture
-2. Click the Exergy ∞ FrameIt toolbar icon → **Start session**
+2. Click the Exergy ∞ Frame toolbar icon → **Start session**
 3. Watch the on-page countdown (3 → 2 → 1)
 4. Use the session bar timer while you work; click **Stop & save** when done
 5. The recording downloads as `{tab title} {YYYY-MM-DD HH_MM}.mp4` (or `.webm` if MP4 is unavailable)

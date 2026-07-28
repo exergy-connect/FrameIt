@@ -259,7 +259,7 @@ async function ensureOffscreenDocument() {
       url: OFFSCREEN_PATH,
       reasons: ["USER_MEDIA", "BLOBS"],
       justification:
-        "Hold the tab MediaStream and MediaRecorder for Exergy ∞ FrameIt sessions.",
+        "Hold the tab MediaStream and MediaRecorder for Exergy ∞ Frame sessions.",
     });
   }
 
