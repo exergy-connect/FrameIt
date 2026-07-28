@@ -12,6 +12,9 @@
   let isPaused = false;
   let pointerEl = null;
   let onPointerMove = null;
+  let onSessionKeyDown = null;
+  let sessionBusy = false;
+  let sessionUi = null; // { bar, pauseBtn, stopBtn, updateTime } when on-page bar exists
   const CURSOR_STYLE_ID = "frameit-cursor-style";
 
   const ICON_PAUSE = `
@@ -102,7 +105,7 @@
             width="56"
             height="56"
           />
-          <div class="frameit-countdown__brand">Exergy ∞ Frame</div>
+          <div class="frameit-countdown__brand">Exergy ∞ xFrame</div>
           <div class="frameit-countdown__number" aria-live="polite">3</div>
           <div class="frameit-countdown__label">Starting capture...</div>
         </div>
@@ -146,10 +149,13 @@
     const root = ensureRoot();
     clearRoot();
     stopPointer();
+    unbindSessionKeys();
     clearTimer();
     totalPausedMs = 0;
     pausedAt = 0;
     isPaused = false;
+    sessionBusy = false;
+    sessionUi = null;
 
     if (includeLogo) {
       const logoUrl = chrome.runtime.getURL("assets/exergy_connect_logo.png");
@@ -163,16 +169,16 @@
     }
 
     if (includePointer) {
-      // Native cursor is hidden; draw a captureable DOM pointer instead.
       startPointer(root);
     }
 
-    // Always hide the page's native cursor while recording so a disabled
-    // "include pointer" option does not leave the system cursor in the video.
+    // Always hide the native cursor while recording (capture stays clean).
+    // Use P = pause/continue and S = stop & save when the cursor is hidden.
     hideNativeCursor(true);
+    bindSessionKeys();
 
     // When controls are hidden from the video, omit the on-page session bar.
-    // The extension popup provides pause / stop instead.
+    // The extension popup (and P/S keys) provide pause / stop instead.
     if (hideControls) {
       return;
     }
@@ -182,20 +188,20 @@
     bar.innerHTML = `
       <div class="frameit-session-bar__left">
         <span class="frameit-session-bar__dot" aria-hidden="true"></span>
-        <span class="frameit-session-bar__title">Exergy ∞ Frame</span>
+        <span class="frameit-session-bar__title">Exergy ∞ xFrame</span>
         <span class="frameit-session-bar__time" aria-live="polite">00:00</span>
       </div>
       <div class="frameit-session-bar__controls">
         <button
           type="button"
           class="frameit-btn frameit-btn--pause"
-          title="Pause"
+          title="Pause (P)"
           aria-label="Pause"
         >${ICON_PAUSE}</button>
         <button
           type="button"
           class="frameit-btn frameit-btn--stop"
-          title="Stop and save"
+          title="Stop and save (S)"
           aria-label="Stop and save"
         >${ICON_STOP}</button>
       </div>
@@ -212,70 +218,123 @@
     updateTime();
     timerId = window.setInterval(updateTime, 250);
 
-    pauseBtn.addEventListener("click", async () => {
-      pauseBtn.disabled = true;
-      stopBtn.disabled = true;
-      try {
-        if (isPaused) {
-          const result = await chrome.runtime.sendMessage({
-            type: "frameit-resume-session",
-          });
-          if (!result?.ok) {
-            throw new Error(result?.error || "Could not continue recording.");
-          }
-          if (pausedAt) {
-            totalPausedMs += Date.now() - pausedAt;
-          }
-          pausedAt = 0;
-          isPaused = false;
-          bar.classList.remove("frameit-session-bar--paused");
-          pauseBtn.innerHTML = ICON_PAUSE;
-          pauseBtn.title = "Pause";
-          pauseBtn.setAttribute("aria-label", "Pause");
-        } else {
-          const result = await chrome.runtime.sendMessage({
-            type: "frameit-pause-session",
-          });
-          if (!result?.ok) {
-            throw new Error(result?.error || "Could not pause recording.");
-          }
-          pausedAt = Date.now();
-          isPaused = true;
-          bar.classList.add("frameit-session-bar--paused");
-          pauseBtn.innerHTML = ICON_CONTINUE;
-          pauseBtn.title = "Continue";
-          pauseBtn.setAttribute("aria-label", "Continue");
-        }
-        updateTime();
-      } catch (error) {
-        window.alert(String(error?.message || error));
-      } finally {
-        pauseBtn.disabled = false;
-        stopBtn.disabled = false;
-      }
-    });
+    sessionUi = { bar, pauseBtn, stopBtn, updateTime };
 
-    stopBtn.addEventListener("click", async () => {
-      pauseBtn.disabled = true;
-      stopBtn.disabled = true;
-      stopBtn.title = "Saving…";
-      try {
+    pauseBtn.addEventListener("click", () => togglePause());
+    stopBtn.addEventListener("click", () => stopAndSave());
+  }
+
+  function isTypingTarget(target) {
+    if (!target || !(target instanceof Element)) return false;
+    const tag = target.tagName;
+    return (
+      target.isContentEditable ||
+      tag === "INPUT" ||
+      tag === "TEXTAREA" ||
+      tag === "SELECT"
+    );
+  }
+
+  function bindSessionKeys() {
+    unbindSessionKeys();
+    onSessionKeyDown = (event) => {
+      if (event.altKey || event.ctrlKey || event.metaKey || event.repeat) return;
+      if (isTypingTarget(event.target)) return;
+      const key = String(event.key || "").toLowerCase();
+      if (key === "p") {
+        event.preventDefault();
+        togglePause();
+      } else if (key === "s") {
+        event.preventDefault();
+        stopAndSave();
+      }
+    };
+    window.addEventListener("keydown", onSessionKeyDown, true);
+  }
+
+  function unbindSessionKeys() {
+    if (onSessionKeyDown) {
+      window.removeEventListener("keydown", onSessionKeyDown, true);
+      onSessionKeyDown = null;
+    }
+  }
+
+  async function togglePause() {
+    if (sessionBusy) return;
+    sessionBusy = true;
+    const { pauseBtn, stopBtn, bar, updateTime } = sessionUi || {};
+    if (pauseBtn) pauseBtn.disabled = true;
+    if (stopBtn) stopBtn.disabled = true;
+    try {
+      if (isPaused) {
         const result = await chrome.runtime.sendMessage({
-          type: "frameit-stop-session",
+          type: "frameit-resume-session",
         });
         if (!result?.ok) {
-          pauseBtn.disabled = false;
-          stopBtn.disabled = false;
-          stopBtn.title = "Stop and save";
-          window.alert(result?.error || "Could not save the recording.");
+          throw new Error(result?.error || "Could not continue recording.");
         }
-      } catch (error) {
-        pauseBtn.disabled = false;
-        stopBtn.disabled = false;
-        stopBtn.title = "Stop and save";
-        window.alert(String(error?.message || error));
+        if (pausedAt) {
+          totalPausedMs += Date.now() - pausedAt;
+        }
+        pausedAt = 0;
+        isPaused = false;
+        if (bar) bar.classList.remove("frameit-session-bar--paused");
+        if (pauseBtn) {
+          pauseBtn.innerHTML = ICON_PAUSE;
+          pauseBtn.title = "Pause (P)";
+          pauseBtn.setAttribute("aria-label", "Pause");
+        }
+      } else {
+        const result = await chrome.runtime.sendMessage({
+          type: "frameit-pause-session",
+        });
+        if (!result?.ok) {
+          throw new Error(result?.error || "Could not pause recording.");
+        }
+        pausedAt = Date.now();
+        isPaused = true;
+        if (bar) bar.classList.add("frameit-session-bar--paused");
+        if (pauseBtn) {
+          pauseBtn.innerHTML = ICON_CONTINUE;
+          pauseBtn.title = "Continue (P)";
+          pauseBtn.setAttribute("aria-label", "Continue");
+        }
       }
-    });
+      if (updateTime) updateTime();
+    } catch (error) {
+      window.alert(String(error?.message || error));
+    } finally {
+      sessionBusy = false;
+      if (pauseBtn) pauseBtn.disabled = false;
+      if (stopBtn) stopBtn.disabled = false;
+    }
+  }
+
+  async function stopAndSave() {
+    if (sessionBusy) return;
+    sessionBusy = true;
+    const { pauseBtn, stopBtn } = sessionUi || {};
+    if (pauseBtn) pauseBtn.disabled = true;
+    if (stopBtn) {
+      stopBtn.disabled = true;
+      stopBtn.title = "Saving…";
+    }
+    try {
+      const result = await chrome.runtime.sendMessage({
+        type: "frameit-stop-session",
+      });
+      if (!result?.ok) {
+        throw new Error(result?.error || "Could not save the recording.");
+      }
+    } catch (error) {
+      sessionBusy = false;
+      if (pauseBtn) pauseBtn.disabled = false;
+      if (stopBtn) {
+        stopBtn.disabled = false;
+        stopBtn.title = "Stop and save (S)";
+      }
+      window.alert(String(error?.message || error));
+    }
   }
 
   function hideNativeCursor(hidden) {
@@ -342,7 +401,10 @@
   function teardown() {
     clearTimer();
     stopPointer();
+    unbindSessionKeys();
     hideNativeCursor(false);
+    sessionUi = null;
+    sessionBusy = false;
     const root = document.getElementById(ROOT_ID);
     if (root) {
       root.remove();
