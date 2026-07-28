@@ -279,29 +279,38 @@
       z-index: 3;
     }
 
-    .store-badge {
-      display: block;
+    .store-badge-wrap {
+      position: relative;
+      display: flex;
+      justify-content: center;
       width: min(72vw, 206px);
       opacity: 0;
       pointer-events: none;
-      transition: opacity 0.4s ease, transform 0.2s ease;
+      transition: opacity 0.4s ease;
+    }
+
+    .store-badge-wrap.revealed {
+      opacity: 1;
+      pointer-events: auto;
+    }
+
+    .store-badge {
+      display: block;
+      width: 100%;
       line-height: 0;
       border-radius: 6px;
       overflow: hidden;
       box-shadow: 0 6px 18px rgba(0, 0, 0, 0.28);
       -webkit-tap-highlight-color: transparent;
-    }
-
-    .store-badge.revealed {
-      opacity: 1;
-      pointer-events: auto;
+      transition: transform 0.2s ease;
     }
 
     .store-badge[aria-disabled="true"] {
       cursor: default;
     }
 
-    .store-badge:not([aria-disabled="true"]):hover {
+    .store-badge-wrap:not(:has(.store-badge[aria-disabled="true"])):hover .store-badge,
+    .store-badge-wrap:not(:has(.store-badge[aria-disabled="true"])):focus-within .store-badge {
       transform: translateY(-1px);
     }
 
@@ -310,6 +319,46 @@
       width: 100%;
       height: auto;
       background: #fff;
+    }
+
+    .store-tip {
+      position: absolute;
+      left: 50%;
+      bottom: calc(100% + 0.55rem);
+      transform: translateX(-50%) translateY(4px);
+      width: max-content;
+      max-width: min(90vw, 16rem);
+      padding: 0.45rem 0.7rem;
+      border-radius: 8px;
+      background: rgba(15, 20, 25, 0.94);
+      border: 1px solid var(--line);
+      color: var(--text);
+      font-size: 0.78rem;
+      font-weight: 600;
+      line-height: 1.35;
+      text-align: center;
+      box-shadow: 0 8px 20px rgba(0, 0, 0, 0.35);
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.18s ease, transform 0.18s ease;
+      z-index: 5;
+    }
+
+    .store-tip::after {
+      content: "";
+      position: absolute;
+      top: 100%;
+      left: 50%;
+      transform: translateX(-50%);
+      border: 6px solid transparent;
+      border-top-color: rgba(15, 20, 25, 0.94);
+    }
+
+    .store-badge-wrap:hover .store-tip,
+    .store-badge-wrap:focus-within .store-tip,
+    .store-badge-wrap.is-tip-visible .store-tip {
+      opacity: 1;
+      transform: translateX(-50%) translateY(0);
     }
 
     .control {
@@ -443,9 +492,9 @@
 
     @media (prefers-reduced-motion: reduce) {
       .stroke { stroke-dashoffset: 0; opacity: 1; }
-      .label, .brand, .phase, .control, .store-badge, .fill-fade, .countdown-num, .file-inf { opacity: 1; }
+      .label, .brand, .phase, .control, .store-badge-wrap, .fill-fade, .countdown-num, .file-inf { opacity: 1; }
       .countdown-num { display: none; }
-      .control, .store-badge { pointer-events: auto; }
+      .control, .store-badge-wrap { pointer-events: auto; }
     }
   </style>
 </head>
@@ -467,19 +516,23 @@
         </div>
       </div>
     </div>
-    <a
-      class="store-badge"
-      id="storeBadge"
-      aria-label="Available in the Chrome Web Store"
-    >
-      <img
-        src="https://developer.chrome.com/static/docs/webstore/branding/image/HRs9MPufa1J1h5glNhut.png"
-        alt="Available in the Chrome Web Store"
-        width="206"
-        height="58"
-        decoding="async"
-      />
-    </a>
+    <div class="store-badge-wrap" id="storeBadgeWrap">
+      <a
+        class="store-badge"
+        id="storeBadge"
+        aria-label="Available in the Chrome Web Store"
+        aria-describedby="storeTip"
+      >
+        <img
+          src="https://developer.chrome.com/static/docs/webstore/branding/image/HRs9MPufa1J1h5glNhut.png"
+          alt="Available in the Chrome Web Store"
+          width="206"
+          height="58"
+          decoding="async"
+        />
+      </a>
+      <span class="store-tip" id="storeTip" role="tooltip"></span>
+    </div>
   </div>
 
   <script>
@@ -489,6 +542,8 @@
     const brand = document.getElementById("brand");
     const replayBtn = document.getElementById("replay");
     const storeBadge = document.getElementById("storeBadge");
+    const storeBadgeWrap = document.getElementById("storeBadgeWrap");
+    const storeTip = document.getElementById("storeTip");
     const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
     const narrow = window.matchMedia("(max-width: 640px)").matches;
 
@@ -500,13 +555,24 @@
       storeBadge.target = "_blank";
       storeBadge.rel = "noopener noreferrer";
       storeBadge.removeAttribute("aria-disabled");
-      storeBadge.title = "Get Exergy ∞ xFrame on the Chrome Web Store";
+      storeTip.textContent = "Get Exergy ∞ xFrame on the Chrome Web Store";
     } else {
       storeBadge.removeAttribute("href");
       storeBadge.setAttribute("aria-disabled", "true");
-      storeBadge.title = "Coming soon to the Chrome Web Store";
+      storeTip.textContent = "Coming soon to the Chrome Web Store";
       storeBadge.addEventListener("click", (event) => event.preventDefault());
     }
+
+    // Touch devices: tap toggles the in-page tip (native title tooltips aren't captured).
+    storeBadge.addEventListener("pointerdown", (event) => {
+      if (event.pointerType !== "touch") return;
+      storeBadgeWrap.classList.toggle("is-tip-visible");
+    });
+    document.addEventListener("pointerdown", (event) => {
+      if (!storeBadgeWrap.contains(event.target)) {
+        storeBadgeWrap.classList.remove("is-tip-visible");
+      }
+    });
 
     const TITLE = {
       stage: narrow ? "Your tab is the stage" : "Your tab is the stage…",
@@ -843,7 +909,7 @@
       phaseTitle.classList.remove("visible");
       phaseTitle.textContent = "";
       brand.classList.remove("visible");
-      storeBadge.classList.remove("revealed");
+      storeBadgeWrap.classList.remove("revealed", "is-tip-visible");
       replayBtn.classList.remove("revealed");
     }
 
@@ -862,7 +928,7 @@
         brand.classList.add("visible");
         phaseTitle.textContent = TITLE.end;
         phaseTitle.classList.add("visible");
-        storeBadge.classList.add("revealed");
+        storeBadgeWrap.classList.add("revealed");
         replayBtn.classList.add("revealed");
         return;
       }
@@ -926,7 +992,7 @@
       await wait(700);
 
       await setTitle(TITLE.end);
-      storeBadge.classList.add("revealed");
+      storeBadgeWrap.classList.add("revealed");
       replayBtn.classList.add("revealed");
     }
 
