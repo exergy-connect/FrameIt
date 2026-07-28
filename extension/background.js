@@ -1,12 +1,41 @@
 const OFFSCREEN_PATH = "offscreen.html";
 const OFFSCREEN_URL = chrome.runtime.getURL(OFFSCREEN_PATH);
 
+const CONTENT_SESSION_TYPES = new Set([
+  "frameit-countdown-done",
+  "frameit-stop-session",
+  "frameit-pause-session",
+  "frameit-resume-session",
+]);
+
+const EXTENSION_PAGE_TYPES = new Set([
+  "frameit-start-session",
+  "frameit-get-status",
+]);
+
 let session = null;
 
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (!message || !message.type) return;
 
+  const fromContentScript = Boolean(sender.tab);
+
+  // Content scripts may only drive overlay/session UI events.
+  if (fromContentScript && !CONTENT_SESSION_TYPES.has(message.type)) {
+    return false;
+  }
+
+  // Popup / extension-page commands should not come from a tab content script.
+  if (!fromContentScript && !EXTENSION_PAGE_TYPES.has(message.type) && !CONTENT_SESSION_TYPES.has(message.type)) {
+    // Ignore offscreen-only traffic (acquire/start/stop/ping/etc.).
+    return false;
+  }
+
   if (message.type === "frameit-start-session") {
+    if (fromContentScript) {
+      sendResponse({ ok: false, error: "Start session must come from the extension UI" });
+      return false;
+    }
     startSession({
       includeLogo: message.includeLogo !== false,
     })
@@ -54,6 +83,10 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   }
 
   if (message.type === "frameit-get-status") {
+    if (fromContentScript) {
+      sendResponse({ ok: false, error: "Status is only available to the extension UI" });
+      return false;
+    }
     sendResponse({
       ok: true,
       active: Boolean(session),
@@ -62,10 +95,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     return false;
   }
 
-  // Ignore messages meant for the offscreen document or content script.
-  if (sender?.id === chrome.runtime.id) {
-    return false;
-  }
+  return false;
 });
 
 async function startSession({ includeLogo = true } = {}) {
@@ -77,7 +107,12 @@ async function startSession({ includeLogo = true } = {}) {
   if (!tab?.id) {
     throw new Error("No active tab found");
   }
-  if (tab.url?.startsWith("chrome://") || tab.url?.startsWith("chrome-extension://") || tab.url?.startsWith("https://chrome.google.com/webstore")) {
+  if (
+    tab.url?.startsWith("chrome://") ||
+    tab.url?.startsWith("chrome-extension://") ||
+    tab.url?.startsWith("https://chrome.google.com/webstore") ||
+    tab.url?.startsWith("https://chromewebstore.google.com/")
+  ) {
     throw new Error("This page cannot be captured. Open a regular website tab.");
   }
 
@@ -179,19 +214,20 @@ async function stopSession() {
   try {
     const stopped = await sendToOffscreen({
       type: "frameit-stop-recording",
+      filename,
     });
     if (!stopped?.ok) {
       throw new Error(stopped?.error || "Failed to stop recording");
     }
 
     const finalMime = stopped.mimeType || mimeType || "video/webm";
-    const finalName = buildFilename(
-      tabTitle,
-      sessionStartedAt,
-      (finalMime.includes("mp4") ? ".mp4" : ".webm")
-    );
-
-    await downloadRecording(stopped.dataUrl, finalName);
+    const finalName =
+      stopped.filename ||
+      buildFilename(
+        tabTitle,
+        sessionStartedAt,
+        finalMime.includes("mp4") ? ".mp4" : ".webm"
+      );
 
     try {
       await chrome.tabs.sendMessage(tabId, { type: "frameit-teardown" });
@@ -207,18 +243,6 @@ async function stopSession() {
     await abortSession();
     throw error;
   }
-}
-
-async function downloadRecording(dataUrl, filename) {
-  if (!dataUrl || typeof dataUrl !== "string") {
-    throw new Error("Recording data was empty");
-  }
-
-  await chrome.downloads.download({
-    url: dataUrl,
-    filename,
-    saveAs: false,
-  });
 }
 
 async function abortSession() {
@@ -271,17 +295,23 @@ async function waitForOffscreenReady() {
   let lastError = null;
 
   while (Date.now() < deadline) {
+    if (!(await hasOffscreenDocument())) {
+      await delay(50);
+      continue;
+    }
+
     try {
+      // Only the offscreen page answers this; content scripts ignore it.
       const response = await chrome.runtime.sendMessage({
         type: "frameit-offscreen-ping",
       });
-      if (response?.ok) {
+      if (response?.ok && response.source === "offscreen") {
         return;
       }
     } catch (error) {
       lastError = error;
     }
-    await new Promise((resolve) => setTimeout(resolve, 50));
+    await delay(50);
   }
 
   throw new Error(
@@ -314,6 +344,10 @@ async function hasOffscreenDocument() {
 
 function sendToOffscreen(message) {
   return chrome.runtime.sendMessage(message);
+}
+
+function delay(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 function buildFilename(tabTitle, date, extension) {

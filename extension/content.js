@@ -25,8 +25,13 @@
       <rect x="6" y="6" width="12" height="12" rx="2"></rect>
     </svg>`;
 
-  chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
+  chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     if (!message || !message.type) return;
+
+    // Only accept overlay commands from this extension.
+    if (sender.id !== chrome.runtime.id) {
+      return false;
+    }
 
     if (message.type === "frameit-show-countdown") {
       showCountdown()
@@ -49,6 +54,9 @@
       sendResponse({ ok: true });
       return false;
     }
+
+    // Ignore internal offscreen/background traffic broadcast on this channel.
+    return false;
   });
 
   function ensureRoot() {

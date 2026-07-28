@@ -18,6 +18,8 @@
 4. Use the session bar timer while you work; click **Stop & save** when done
 5. The recording downloads as `{tab title} {YYYY-MM-DD HH_MM}.mp4` (or `.webm` if MP4 is unavailable)
 
+**Estimated size:** about **0.3–1 MB per second** of capture (~18–60 MB per minute), depending on tab resolution, motion, audio, and whether Chrome encodes MP4 or WebM at its default MediaRecorder bitrate. Quiet static pages land near the low end; busy or full-HD tabs trend higher.
+
 ## Session flow
 
 Start acquires the tab stream and prepares the offscreen recorder before the countdown. Encoding begins only after the countdown finishes so the digits are not recorded. Stop finalizes the blob and saves it to Downloads.
@@ -59,8 +61,17 @@ sequenceDiagram
 ## Notes
 
 - Chrome only (Manifest V3). Restricted pages such as `chrome://` URLs cannot be captured.
+- Declares `host_permissions` for `<all_urls>` so `tabCapture.getMediaStreamId` can target the active tab reliably (in addition to `activeTab` from the popup gesture).
 - Prefer native `MediaRecorder` MP4 (`video/mp4`). If MP4 is advertised but fails to start, or is unsupported, the extension falls back to WebM and uses a `.webm` extension (it never mislabels WebM as MP4).
+- Recordings are saved via a `blob:` URL from the offscreen recorder (not Base64 data URLs), so longer sessions do not blow IPC message limits. The blob URL is revoked after the download completes (or on discard/error).
 - No npm runtime dependencies; the extension is plain HTML/CSS/JS.
+
+## Chrome Web Store package
+
+The [`Package Chrome extension`](.github/workflows/package-extension.yml) workflow zips the contents of [`extension/`](extension/) (with `manifest.json` at the archive root) as `exergy-frame-<version>.zip`.
+
+- On pushes/PRs to `main`, the zip is uploaded as a workflow artifact
+- On a published GitHub Release, the same zip is attached to that release for Chrome Web Store upload
 
 ## Brand assets
 
