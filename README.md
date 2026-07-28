@@ -16,7 +16,7 @@
 2. Click the Exergy ∞ FrameIt toolbar icon → **Start session**
 3. Watch the on-page countdown (3 → 2 → 1)
 4. Use the session bar timer while you work; click **Stop & save** when done
-5. The recording downloads as `{tab title} {YYYY-MM-DD HH:MM}.mp4` (or `.webm` if MP4 is unavailable)
+5. The recording downloads as `{tab title} {YYYY-MM-DD HH_MM}.mp4` (or `.webm` if MP4 is unavailable)
 
 ## Session flow
 

@@ -99,6 +99,23 @@
         cursor: default;
       }
 
+      .option {
+        display: flex;
+        align-items: flex-start;
+        gap: 10px;
+        font-size: 13px;
+        line-height: 1.35;
+        color: var(--text);
+        cursor: pointer;
+        user-select: none;
+      }
+
+      .option input {
+        margin: 2px 0 0;
+        accent-color: var(--accent1);
+        flex-shrink: 0;
+      }
+
       .status {
         min-height: 1.2em;
         font-size: 12px;
@@ -143,6 +160,11 @@
           />
         </div>
       </div>
+
+      <label class="option" for="includeLogo">
+        <input id="includeLogo" type="checkbox" checked />
+        <span>Include Exergy logo in recording (top right)</span>
+      </label>
 
       <button id="start" type="button">Start session</button>
       <div id="status" class="status" role="status"></div>

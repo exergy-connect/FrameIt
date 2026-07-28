@@ -38,6 +38,26 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
     return true;
   }
 
+  if (message.type === "frameit-pause-recording") {
+    try {
+      pauseRecording();
+      sendResponse({ ok: true });
+    } catch (error) {
+      sendResponse({ ok: false, error: String(error?.message || error) });
+    }
+    return false;
+  }
+
+  if (message.type === "frameit-resume-recording") {
+    try {
+      resumeRecording();
+      sendResponse({ ok: true });
+    } catch (error) {
+      sendResponse({ ok: false, error: String(error?.message || error) });
+    }
+    return false;
+  }
+
   if (message.type === "frameit-stop-recording") {
     stopRecording()
       .then((result) => sendResponse({ ok: true, ...result }))
@@ -168,6 +188,20 @@ async function startRecording() {
 
   mediaRecorder.start(1000);
   return activeMimeType;
+}
+
+function pauseRecording() {
+  if (!mediaRecorder || mediaRecorder.state !== "recording") {
+    throw new Error("Recorder is not recording");
+  }
+  mediaRecorder.pause();
+}
+
+function resumeRecording() {
+  if (!mediaRecorder || mediaRecorder.state !== "paused") {
+    throw new Error("Recorder is not paused");
+  }
+  mediaRecorder.resume();
 }
 
 async function stopRecording() {

@@ -7,6 +7,23 @@
   const ROOT_ID = "frameit-root";
   let timerId = null;
   let recordingStartedAt = 0;
+  let totalPausedMs = 0;
+  let pausedAt = 0;
+  let isPaused = false;
+
+  const ICON_PAUSE = `
+    <svg class="frameit-icon" viewBox="0 0 24 24" aria-hidden="true">
+      <rect x="6" y="5" width="4" height="14" rx="1"></rect>
+      <rect x="14" y="5" width="4" height="14" rx="1"></rect>
+    </svg>`;
+  const ICON_CONTINUE = `
+    <svg class="frameit-icon" viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M8 5v14l11-7z"></path>
+    </svg>`;
+  const ICON_STOP = `
+    <svg class="frameit-icon" viewBox="0 0 24 24" aria-hidden="true">
+      <rect x="6" y="6" width="12" height="12" rx="2"></rect>
+    </svg>`;
 
   chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
     if (!message || !message.type) return;
@@ -22,7 +39,7 @@
 
     if (message.type === "frameit-show-session-bar") {
       recordingStartedAt = message.startedAt || Date.now();
-      showSessionBar();
+      showSessionBar({ includeLogo: message.includeLogo !== false });
       sendResponse({ ok: true });
       return false;
     }
@@ -106,10 +123,24 @@
     });
   }
 
-  function showSessionBar() {
+  function showSessionBar({ includeLogo = true } = {}) {
     const root = ensureRoot();
     clearRoot();
     clearTimer();
+    totalPausedMs = 0;
+    pausedAt = 0;
+    isPaused = false;
+
+    if (includeLogo) {
+      const logoUrl = chrome.runtime.getURL("assets/exergy_connect_logo.png");
+      const watermark = document.createElement("img");
+      watermark.className = "frameit-watermark";
+      watermark.src = logoUrl;
+      watermark.alt = "Exergy Connect";
+      watermark.width = 48;
+      watermark.height = 48;
+      root.appendChild(watermark);
+    }
 
     const bar = document.createElement("div");
     bar.className = "frameit-session-bar";
@@ -119,37 +150,105 @@
         <span class="frameit-session-bar__title">Exergy ∞ FrameIt</span>
         <span class="frameit-session-bar__time" aria-live="polite">00:00</span>
       </div>
-      <button type="button" class="frameit-session-bar__stop">Stop &amp; save</button>
+      <div class="frameit-session-bar__controls">
+        <button
+          type="button"
+          class="frameit-btn frameit-btn--pause"
+          title="Pause"
+          aria-label="Pause"
+        >${ICON_PAUSE}</button>
+        <button
+          type="button"
+          class="frameit-btn frameit-btn--stop"
+          title="Stop and save"
+          aria-label="Stop and save"
+        >${ICON_STOP}</button>
+      </div>
     `;
     root.appendChild(bar);
 
     const timeEl = bar.querySelector(".frameit-session-bar__time");
-    const stopBtn = bar.querySelector(".frameit-session-bar__stop");
+    const pauseBtn = bar.querySelector(".frameit-btn--pause");
+    const stopBtn = bar.querySelector(".frameit-btn--stop");
 
     const updateTime = () => {
-      timeEl.textContent = formatElapsed(Date.now() - recordingStartedAt);
+      timeEl.textContent = formatElapsed(getElapsedMs());
     };
     updateTime();
-    timerId = window.setInterval(updateTime, 1000);
+    timerId = window.setInterval(updateTime, 250);
+
+    pauseBtn.addEventListener("click", async () => {
+      pauseBtn.disabled = true;
+      stopBtn.disabled = true;
+      try {
+        if (isPaused) {
+          const result = await chrome.runtime.sendMessage({
+            type: "frameit-resume-session",
+          });
+          if (!result?.ok) {
+            throw new Error(result?.error || "Could not continue recording.");
+          }
+          if (pausedAt) {
+            totalPausedMs += Date.now() - pausedAt;
+          }
+          pausedAt = 0;
+          isPaused = false;
+          bar.classList.remove("frameit-session-bar--paused");
+          pauseBtn.innerHTML = ICON_PAUSE;
+          pauseBtn.title = "Pause";
+          pauseBtn.setAttribute("aria-label", "Pause");
+        } else {
+          const result = await chrome.runtime.sendMessage({
+            type: "frameit-pause-session",
+          });
+          if (!result?.ok) {
+            throw new Error(result?.error || "Could not pause recording.");
+          }
+          pausedAt = Date.now();
+          isPaused = true;
+          bar.classList.add("frameit-session-bar--paused");
+          pauseBtn.innerHTML = ICON_CONTINUE;
+          pauseBtn.title = "Continue";
+          pauseBtn.setAttribute("aria-label", "Continue");
+        }
+        updateTime();
+      } catch (error) {
+        window.alert(String(error?.message || error));
+      } finally {
+        pauseBtn.disabled = false;
+        stopBtn.disabled = false;
+      }
+    });
 
     stopBtn.addEventListener("click", async () => {
+      pauseBtn.disabled = true;
       stopBtn.disabled = true;
-      stopBtn.textContent = "Saving…";
+      stopBtn.title = "Saving…";
       try {
         const result = await chrome.runtime.sendMessage({
           type: "frameit-stop-session",
         });
         if (!result?.ok) {
+          pauseBtn.disabled = false;
           stopBtn.disabled = false;
-          stopBtn.textContent = "Stop & save";
+          stopBtn.title = "Stop and save";
           window.alert(result?.error || "Could not save the recording.");
         }
       } catch (error) {
+        pauseBtn.disabled = false;
         stopBtn.disabled = false;
-        stopBtn.textContent = "Stop & save";
+        stopBtn.title = "Stop and save";
         window.alert(String(error?.message || error));
       }
     });
+  }
+
+  function getElapsedMs() {
+    const pausedExtra = isPaused && pausedAt ? Date.now() - pausedAt : 0;
+    return Math.max(
+      0,
+      Date.now() - recordingStartedAt - totalPausedMs - pausedExtra
+    );
   }
 
   function teardown() {

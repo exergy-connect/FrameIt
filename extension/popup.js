@@ -1,5 +1,6 @@
 const startBtn = document.getElementById("start");
 const statusEl = document.getElementById("status");
+const includeLogoEl = document.getElementById("includeLogo");
 
 refreshStatus();
 
@@ -10,6 +11,7 @@ startBtn.addEventListener("click", async () => {
   try {
     const result = await chrome.runtime.sendMessage({
       type: "frameit-start-session",
+      includeLogo: includeLogoEl.checked,
     });
     if (!result?.ok) {
       throw new Error(result?.error || "Could not start session");
@@ -29,6 +31,7 @@ async function refreshStatus() {
     });
     if (result?.active) {
       startBtn.disabled = true;
+      includeLogoEl.disabled = true;
       setStatus(`Session in progress (${result.phase || "active"}).`);
     }
   } catch (_error) {

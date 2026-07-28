@@ -7,7 +7,9 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (!message || !message.type) return;
 
   if (message.type === "frameit-start-session") {
-    startSession()
+    startSession({
+      includeLogo: message.includeLogo !== false,
+    })
       .then(() => sendResponse({ ok: true }))
       .catch((error) =>
         sendResponse({ ok: false, error: String(error?.message || error) })
@@ -33,6 +35,24 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     return true;
   }
 
+  if (message.type === "frameit-pause-session") {
+    pauseSession()
+      .then(() => sendResponse({ ok: true }))
+      .catch((error) =>
+        sendResponse({ ok: false, error: String(error?.message || error) })
+      );
+    return true;
+  }
+
+  if (message.type === "frameit-resume-session") {
+    resumeSession()
+      .then(() => sendResponse({ ok: true }))
+      .catch((error) =>
+        sendResponse({ ok: false, error: String(error?.message || error) })
+      );
+    return true;
+  }
+
   if (message.type === "frameit-get-status") {
     sendResponse({
       ok: true,
@@ -48,7 +68,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   }
 });
 
-async function startSession() {
+async function startSession({ includeLogo = true } = {}) {
   if (session) {
     throw new Error("A session is already in progress");
   }
@@ -70,6 +90,7 @@ async function startSession() {
     sessionStartedAt,
     phase: "acquiring",
     mimeType: "",
+    includeLogo: Boolean(includeLogo),
   };
 
   try {
@@ -108,12 +129,40 @@ async function onCountdownDone() {
 
   session.mimeType = started.mimeType || "";
   session.phase = "recording";
+  session.paused = false;
   session.recordingStartedAt = Date.now();
 
   await chrome.tabs.sendMessage(session.tabId, {
     type: "frameit-show-session-bar",
     startedAt: session.recordingStartedAt,
+    includeLogo: session.includeLogo !== false,
   });
+}
+
+async function pauseSession() {
+  if (!session || session.phase !== "recording" || session.paused) {
+    throw new Error("Session is not recording");
+  }
+
+  const paused = await sendToOffscreen({ type: "frameit-pause-recording" });
+  if (!paused?.ok) {
+    throw new Error(paused?.error || "Failed to pause recording");
+  }
+
+  session.paused = true;
+}
+
+async function resumeSession() {
+  if (!session || session.phase !== "recording" || !session.paused) {
+    throw new Error("Session is not paused");
+  }
+
+  const resumed = await sendToOffscreen({ type: "frameit-resume-recording" });
+  if (!resumed?.ok) {
+    throw new Error(resumed?.error || "Failed to resume recording");
+  }
+
+  session.paused = false;
 }
 
 async function stopSession() {
@@ -289,5 +338,5 @@ function formatSessionStamp(date) {
   const day = String(d.getDate()).padStart(2, "0");
   const hours = String(d.getHours()).padStart(2, "0");
   const minutes = String(d.getMinutes()).padStart(2, "0");
-  return `${year}-${month}-${day} ${hours}:${minutes}`;
+  return `${year}-${month}-${day} ${hours}_${minutes}`;
 }
