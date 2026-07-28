@@ -56,11 +56,20 @@
         linear-gradient(165deg, var(--bg1) 0%, var(--bg0) 100%);
     }
 
+    .page {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 0.85rem;
+      width: min(94vw, 760px);
+      max-width: 100%;
+    }
+
     .stage {
       position: relative;
       display: flex;
       flex-direction: column;
-      width: min(94vw, 760px);
+      width: 100%;
       aspect-ratio: 16 / 11;
       max-height: min(88dvh, 88vh);
       max-width: 100%;
@@ -270,6 +279,39 @@
       z-index: 3;
     }
 
+    .store-badge {
+      display: block;
+      width: min(72vw, 206px);
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.4s ease, transform 0.2s ease;
+      line-height: 0;
+      border-radius: 6px;
+      overflow: hidden;
+      box-shadow: 0 6px 18px rgba(0, 0, 0, 0.28);
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    .store-badge.revealed {
+      opacity: 1;
+      pointer-events: auto;
+    }
+
+    .store-badge[aria-disabled="true"] {
+      cursor: default;
+    }
+
+    .store-badge:not([aria-disabled="true"]):hover {
+      transform: translateY(-1px);
+    }
+
+    .store-badge img {
+      display: block;
+      width: 100%;
+      height: auto;
+      background: #fff;
+    }
+
     .control {
       appearance: none;
       -webkit-appearance: none;
@@ -320,10 +362,14 @@
     }
 
     @media (max-width: 640px) {
-      .stage {
+      .page {
         width: min(96vw, 760px);
+        gap: 0.7rem;
+      }
+
+      .stage {
         aspect-ratio: 4 / 5;
-        max-height: min(82dvh, 82vh);
+        max-height: min(76dvh, 76vh);
         gap: 0.45rem;
       }
 
@@ -369,10 +415,13 @@
     }
 
     @media (max-width: 640px) and (orientation: landscape) {
+      .page {
+        width: min(92vw, 760px);
+      }
+
       .stage {
         aspect-ratio: 16 / 10;
-        max-height: min(84dvh, 84vh);
-        width: min(92vw, 760px);
+        max-height: min(78dvh, 78vh);
         gap: 0.25rem;
       }
 
@@ -394,28 +443,43 @@
 
     @media (prefers-reduced-motion: reduce) {
       .stroke { stroke-dashoffset: 0; opacity: 1; }
-      .label, .brand, .phase, .control, .fill-fade, .countdown-num, .file-inf { opacity: 1; }
+      .label, .brand, .phase, .control, .store-badge, .fill-fade, .countdown-num, .file-inf { opacity: 1; }
       .countdown-num { display: none; }
-      .control { pointer-events: auto; }
+      .control, .store-badge { pointer-events: auto; }
     }
   </style>
 </head>
 <body>
-  <div class="stage" id="root">
-    <header class="masthead">
-      <div class="brand" id="brand">
-        <img src="extension/assets/exergy_connect_logo.png" alt="Exergy ∞ Connect" width="42" height="42" />
-        <h1>Exergy ∞ xFrame</h1>
-      </div>
-      <p class="phase" id="phaseTitle"></p>
-    </header>
-    <div class="canvas">
-      <div class="glass" aria-hidden="true"></div>
-      <svg class="frame" id="svg" viewBox="0 0 760 520" preserveAspectRatio="xMidYMid meet" aria-hidden="true"></svg>
-      <div class="controls">
-        <button class="control" id="replay" type="button">replay</button>
+  <div class="page">
+    <div class="stage" id="root">
+      <header class="masthead">
+        <div class="brand" id="brand">
+          <img src="extension/assets/exergy_connect_logo.png" alt="Exergy ∞ Connect" width="42" height="42" />
+          <h1>Exergy ∞ xFrame</h1>
+        </div>
+        <p class="phase" id="phaseTitle"></p>
+      </header>
+      <div class="canvas">
+        <div class="glass" aria-hidden="true"></div>
+        <svg class="frame" id="svg" viewBox="0 0 760 520" preserveAspectRatio="xMidYMid meet" aria-hidden="true"></svg>
+        <div class="controls">
+          <button class="control" id="replay" type="button">replay</button>
+        </div>
       </div>
     </div>
+    <a
+      class="store-badge"
+      id="storeBadge"
+      aria-label="Available in the Chrome Web Store"
+    >
+      <img
+        src="https://developer.chrome.com/static/docs/webstore/branding/image/HRs9MPufa1J1h5glNhut.png"
+        alt="Available in the Chrome Web Store"
+        width="206"
+        height="58"
+        decoding="async"
+      />
+    </a>
   </div>
 
   <script>
@@ -424,8 +488,25 @@
     const phaseTitle = document.getElementById("phaseTitle");
     const brand = document.getElementById("brand");
     const replayBtn = document.getElementById("replay");
+    const storeBadge = document.getElementById("storeBadge");
     const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
     const narrow = window.matchMedia("(max-width: 640px)").matches;
+
+    // Set when the Chrome Web Store listing is live.
+    const CHROME_STORE_URL = "";
+
+    if (CHROME_STORE_URL) {
+      storeBadge.href = CHROME_STORE_URL;
+      storeBadge.target = "_blank";
+      storeBadge.rel = "noopener noreferrer";
+      storeBadge.removeAttribute("aria-disabled");
+      storeBadge.title = "Get Exergy ∞ xFrame on the Chrome Web Store";
+    } else {
+      storeBadge.removeAttribute("href");
+      storeBadge.setAttribute("aria-disabled", "true");
+      storeBadge.title = "Coming soon to the Chrome Web Store";
+      storeBadge.addEventListener("click", (event) => event.preventDefault());
+    }
 
     const TITLE = {
       stage: narrow ? "Your tab is the stage" : "Your tab is the stage…",
@@ -433,7 +514,7 @@
       countdown: narrow
         ? "Countdown, then record"
         : "A brief countdown — then recording begins",
-      session: narrow ? "Session bar keeps time" : "Work as usual. A session bar keeps time.",
+      session: narrow ? "Session bar keeps time" : "Browse as usual. A session bar keeps time.",
       save: narrow ? "Stop & save as MP4" : "Stop & save — your session downloads as MP4",
       end: "Intent captured.",
     };
@@ -762,6 +843,7 @@
       phaseTitle.classList.remove("visible");
       phaseTitle.textContent = "";
       brand.classList.remove("visible");
+      storeBadge.classList.remove("revealed");
       replayBtn.classList.remove("revealed");
     }
 
@@ -780,6 +862,7 @@
         brand.classList.add("visible");
         phaseTitle.textContent = TITLE.end;
         phaseTitle.classList.add("visible");
+        storeBadge.classList.add("revealed");
         replayBtn.classList.add("revealed");
         return;
       }
@@ -843,6 +926,7 @@
       await wait(700);
 
       await setTitle(TITLE.end);
+      storeBadge.classList.add("revealed");
       replayBtn.classList.add("revealed");
     }
 
