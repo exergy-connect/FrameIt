@@ -1,30 +1,32 @@
+# Exergy Connect
+
 # Exergy ∞ xFrame <img src="extension/assets/exergy_connect_logo.png" alt="Exergy Connect" width="50" height="50" align="right" />
 
-Intent captured.
+**Intent captured.**
 
 Creating a video from a browser session shouldn't require a desktop screen share, a heavyweight recording suite, or a professional degree.
 
-**Exergy ∞ xFrame** records the current browser tab—including video and tab audio—into a shareable MP4 using simple controls. Record, stop, share.
+Exergy ∞ xFrame records the current browser tab—including video and tab audio—into a shareable MP4 using simple controls. Record. Stop. Share.
 
-This extension is intentionally small. It builds on standard browser capabilities instead of introducing unnecessary complexity.
+Built on standard browser capabilities, xFrame stays small, fast, and easy to understand.
 
-An animated explainer lives at [`index.html`](https://exergy-connect.github.io/FrameIt/).
+An animated explainer is available in [`index.html`](https://exergy-connect.github.io/FrameIt/).
 
 ## Why xFrame?
 
-A recording is only one materialization of an experience.
+A recording is only one materialization.
 
-The purpose of xFrame is to help communicate concepts. The browser recording is simply the first realization of a broader idea: **Conceptual Twinning**—capturing the intent behind digital work so it can be shared, explained, and transformed into other artifacts.
+The purpose of xFrame is to communicate concepts. Recording a browser session is simply the first realization of **Conceptual Twinning**—capturing intent so it can be shared, explained, and transformed.
 
-Today, xFrame produces an MP4.
+Today xFrame produces an MP4.
 
-Tomorrow, the same conceptual frame could produce:
+Tomorrow the same conceptual frame could produce:
 
-- documentation
-- tutorials
-- design reviews
+- Documentation
+- Tutorials
+- Design reviews
 - AI context
-- workflow artifacts
+- Workflow artifacts
 
 The recording is not the product.
 
@@ -39,18 +41,18 @@ It is the first conceptual twin.
 - Lightweight implementation using standard browser APIs
 - No desktop recording
 - No unnecessary UI
+- Optional recording controls (popup or keyboard shortcuts)
+- Optional mouse pointer overlay
 
-Optional controls stay available when you need them: hide the on-page session bar from the video, pause/stop from the popup or keyboard (**P** / **S**), and optionally draw a captureable mouse pointer.
-
-Typical size is about **0.3–1 MB per second** (~18–60 MB per minute), depending on resolution, motion, and audio.
+Typical recordings are approximately **0.3–1 MB/s** (about **18–60 MB/min**), depending on resolution, motion, and audio.
 
 ## Philosophy
 
-Less is different.
+**Less is different.**
 
-Rather than capturing everything, Exergy ∞ xFrame captures what matters. It establishes a frame around an idea, making communication deliberate instead of incidental.
+Rather than capturing everything, Exergy ∞ xFrame captures what matters.
 
-Communicate with intent.
+**Communicate with clear intent.**
 
 ## Load unpacked
 
@@ -140,7 +142,7 @@ sequenceDiagram
 
 ## Chrome Web Store package
 
-The [`Package Chrome extension`](.github/workflows/package-extension.yml) workflow zips the contents of [`extension/`](extension/) (with `manifest.json` at the archive root) as `exergy-infinity-xframe-<version>.zip`.
+The [`Package Chrome extension`](.github/workflows/package-extension.yml) workflow zips the contents of [`extension/`](extension/) (with `manifest.json` at the archive root) as `exergy∞xframe-<version>.zip`.
 
 - On pushes/PRs to `main`, the zip is uploaded as a workflow artifact
 - On a published GitHub Release, the same zip is attached to that release for Chrome Web Store upload
