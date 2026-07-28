@@ -12,6 +12,7 @@
   let isPaused = false;
   let pointerEl = null;
   let onPointerMove = null;
+  const CURSOR_STYLE_ID = "frameit-cursor-style";
 
   const ICON_PAUSE = `
     <svg class="frameit-icon" viewBox="0 0 24 24" aria-hidden="true">
@@ -162,8 +163,13 @@
     }
 
     if (includePointer) {
+      // Native cursor is hidden; draw a captureable DOM pointer instead.
       startPointer(root);
     }
+
+    // Always hide the page's native cursor while recording so a disabled
+    // "include pointer" option does not leave the system cursor in the video.
+    hideNativeCursor(true);
 
     // When controls are hidden from the video, omit the on-page session bar.
     // The extension popup provides pause / stop instead.
@@ -272,6 +278,23 @@
     });
   }
 
+  function hideNativeCursor(hidden) {
+    let style = document.getElementById(CURSOR_STYLE_ID);
+    if (hidden) {
+      if (!style) {
+        style = document.createElement("style");
+        style.id = CURSOR_STYLE_ID;
+        style.textContent =
+          "html.frameit-hide-cursor, html.frameit-hide-cursor * { cursor: none !important; }";
+        (document.head || document.documentElement).appendChild(style);
+      }
+      document.documentElement.classList.add("frameit-hide-cursor");
+      return;
+    }
+    document.documentElement.classList.remove("frameit-hide-cursor");
+    if (style) style.remove();
+  }
+
   function startPointer(root) {
     stopPointer();
     pointerEl = document.createElement("div");
@@ -319,6 +342,7 @@
   function teardown() {
     clearTimer();
     stopPointer();
+    hideNativeCursor(false);
     const root = document.getElementById(ROOT_ID);
     if (root) {
       root.remove();

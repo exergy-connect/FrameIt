@@ -36,7 +36,9 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   }
 
   if (message.type === "frameit-acquire-stream") {
-    acquireStream(message.streamId)
+    acquireStream(message.streamId, {
+      includePointer: Boolean(message.includePointer),
+    })
       .then(() => sendResponse({ ok: true }))
       .catch((error) =>
         sendResponse({ ok: false, error: String(error?.message || error) })
@@ -95,34 +97,57 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   return false;
 });
 
-async function acquireStream(streamId) {
+async function acquireStream(streamId, { includePointer = false } = {}) {
   cleanup();
 
+  const cursor = includePointer ? "always" : "never";
+
+  async function openStream(withAudio) {
+    // Prefer cursor constraint so the OS pointer is not baked into tab capture
+    // unless the user opted in. Fall back if the browser rejects it.
+    const attempts = [
+      {
+        mandatory: {
+          chromeMediaSource: "tab",
+          chromeMediaSourceId: streamId,
+          cursor,
+        },
+      },
+      {
+        mandatory: {
+          chromeMediaSource: "tab",
+          chromeMediaSourceId: streamId,
+        },
+      },
+    ];
+
+    let lastError;
+    for (const video of attempts) {
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({
+          audio: withAudio
+            ? {
+                mandatory: {
+                  chromeMediaSource: "tab",
+                  chromeMediaSourceId: streamId,
+                },
+              }
+            : false,
+          video,
+        });
+        await applyCursorConstraint(stream, cursor);
+        return stream;
+      } catch (error) {
+        lastError = error;
+      }
+    }
+    throw lastError || new Error("Failed to acquire tab stream");
+  }
+
   try {
-    captureStream = await navigator.mediaDevices.getUserMedia({
-      audio: {
-        mandatory: {
-          chromeMediaSource: "tab",
-          chromeMediaSourceId: streamId,
-        },
-      },
-      video: {
-        mandatory: {
-          chromeMediaSource: "tab",
-          chromeMediaSourceId: streamId,
-        },
-      },
-    });
+    captureStream = await openStream(true);
   } catch (_audioError) {
-    captureStream = await navigator.mediaDevices.getUserMedia({
-      audio: false,
-      video: {
-        mandatory: {
-          chromeMediaSource: "tab",
-          chromeMediaSourceId: streamId,
-        },
-      },
-    });
+    captureStream = await openStream(false);
   }
 
   const audioTracks = captureStream.getAudioTracks();
@@ -130,6 +155,20 @@ async function acquireStream(streamId) {
     audioContext = new AudioContext();
     const source = audioContext.createMediaStreamSource(captureStream);
     source.connect(audioContext.destination);
+  }
+}
+
+async function applyCursorConstraint(stream, cursor) {
+  const [track] = stream.getVideoTracks();
+  if (!track?.applyConstraints) return;
+  try {
+    await track.applyConstraints({ advanced: [{ cursor }] });
+  } catch (_error) {
+    try {
+      await track.applyConstraints({ cursor });
+    } catch (_error2) {
+      // Cursor constraint unsupported; content script hides/restores pointer.
+    }
   }
 }
 

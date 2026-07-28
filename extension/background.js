@@ -168,6 +168,7 @@ async function startSession({
     const acquired = await sendToOffscreen({
       type: "frameit-acquire-stream",
       streamId,
+      includePointer: Boolean(includePointer),
     });
     if (!acquired?.ok) {
       throw new Error(acquired?.error || "Failed to acquire tab stream");
