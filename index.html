@@ -2,7 +2,10 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#0f1419" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
   <title>Exergy xFrame</title>
   <link rel="icon" href="extension/assets/favicon.ico" sizes="any" />
   <link rel="icon" href="extension/assets/favicon.svg" type="image/svg+xml" />
@@ -26,13 +29,27 @@
 
     * { box-sizing: border-box; margin: 0; padding: 0; }
 
+    html {
+      height: 100%;
+      -webkit-text-size-adjust: 100%;
+      text-size-adjust: 100%;
+    }
+
     body {
-      min-height: 100vh;
+      min-height: 100%;
+      min-height: 100dvh;
+      min-height: -webkit-fill-available;
       display: grid;
       place-items: center;
       color: var(--text);
       font-family: "Outfit", sans-serif;
       overflow: hidden;
+      padding:
+        max(0.75rem, env(safe-area-inset-top))
+        max(0.75rem, env(safe-area-inset-right))
+        max(0.75rem, env(safe-area-inset-bottom))
+        max(0.75rem, env(safe-area-inset-left));
+      -webkit-font-smoothing: antialiased;
       background:
         radial-gradient(ellipse at 18% 12%, rgba(90, 142, 196, 0.28) 0%, transparent 48%),
         radial-gradient(ellipse at 88% 78%, rgba(30, 58, 88, 0.55) 0%, transparent 50%),
@@ -41,9 +58,10 @@
 
     .stage {
       position: relative;
-      width: min(92vw, 760px);
+      width: min(94vw, 760px);
       aspect-ratio: 16 / 11;
-      max-height: 92vh;
+      max-height: min(88dvh, 88vh);
+      max-width: 100%;
     }
 
     .brand {
@@ -53,10 +71,13 @@
       transform: translateX(-50%);
       display: flex;
       align-items: center;
+      justify-content: center;
       gap: 0.7rem;
       z-index: 2;
       opacity: 0;
       transition: opacity 0.4s ease;
+      width: min(100%, 34rem);
+      padding: 0 0.25rem;
     }
 
     .brand.visible { opacity: 1; }
@@ -64,13 +85,14 @@
     .brand img {
       width: 42px;
       height: 42px;
+      flex-shrink: 0;
       background: #fff;
       box-shadow: 0 6px 18px rgba(0, 0, 0, 0.35);
     }
 
     .brand h1 {
       font-family: "Sora", sans-serif;
-      font-size: clamp(1.35rem, 3.6vw, 1.85rem);
+      font-size: clamp(1.05rem, 4.2vw, 1.85rem);
       font-weight: 700;
       letter-spacing: 0.01em;
       background: linear-gradient(120deg, var(--accent0), var(--accent1) 55%, #7aa8d4);
@@ -78,6 +100,7 @@
       background-clip: text;
       color: transparent;
       white-space: nowrap;
+      line-height: 1.15;
     }
 
     .phase {
@@ -85,14 +108,17 @@
       top: 8.5%;
       left: 50%;
       transform: translateX(-50%);
-      font-size: clamp(0.95rem, 2.4vw, 1.15rem);
+      width: min(94%, 36rem);
+      font-size: clamp(0.82rem, 2.8vw, 1.15rem);
       font-weight: 600;
       color: var(--muted);
       text-align: center;
-      white-space: nowrap;
+      line-height: 1.3;
       opacity: 0;
       transition: opacity 0.35s ease;
       z-index: 2;
+      padding: 0 0.5rem;
+      hyphens: auto;
     }
 
     .phase.visible { opacity: 1; }
@@ -231,24 +257,35 @@
 
     .control {
       appearance: none;
+      -webkit-appearance: none;
       border: 1px solid var(--line);
       background: linear-gradient(120deg, var(--accent0), var(--accent1));
       color: var(--bg0);
       font-family: "Outfit", sans-serif;
       font-size: 0.95rem;
       font-weight: 700;
-      padding: 0.45rem 1.25rem;
+      min-height: 44px;
+      min-width: 7.5rem;
+      padding: 0.55rem 1.35rem;
       border-radius: 999px;
       cursor: pointer;
       opacity: 0;
       pointer-events: none;
       box-shadow: 0 8px 20px rgba(0, 0, 0, 0.3);
       transition: transform 0.15s ease, filter 0.15s ease, opacity 0.3s ease;
+      -webkit-tap-highlight-color: transparent;
+      touch-action: manipulation;
+      user-select: none;
     }
 
     .control:hover {
       filter: brightness(1.08);
       transform: translateY(-1px);
+    }
+
+    .control:active {
+      filter: brightness(0.96);
+      transform: translateY(0);
     }
 
     .control.revealed {
@@ -265,6 +302,68 @@
       0%   { opacity: 0; transform: scale(0.55); }
       70%  { opacity: 1; transform: scale(1.08); }
       100% { opacity: 1; transform: scale(1); }
+    }
+
+    @media (max-width: 640px) {
+      .stage {
+        width: min(96vw, 760px);
+        aspect-ratio: 4 / 5;
+        max-height: min(78dvh, 78vh);
+      }
+
+      .brand {
+        gap: 0.55rem;
+        top: 0.15rem;
+      }
+
+      .brand img {
+        width: 34px;
+        height: 34px;
+      }
+
+      .phase {
+        top: 7%;
+        font-size: clamp(0.78rem, 3.4vw, 0.98rem);
+      }
+
+      .glass {
+        inset: 14% 5% 12% 5%;
+        border-radius: 14px;
+      }
+
+      .controls {
+        bottom: 0.15rem;
+      }
+
+      .label {
+        font-size: 13px;
+      }
+
+      .label.muted {
+        font-size: 11px;
+      }
+
+      .countdown-num {
+        font-size: 42px;
+      }
+    }
+
+    @media (max-width: 640px) and (orientation: landscape) {
+      .stage {
+        aspect-ratio: 16 / 10;
+        max-height: min(82dvh, 82vh);
+        width: min(92vw, 760px);
+      }
+
+      .brand img {
+        width: 28px;
+        height: 28px;
+      }
+
+      .phase {
+        top: 6.5%;
+        font-size: clamp(0.72rem, 2.2vw, 0.9rem);
+      }
     }
 
     @media (prefers-reduced-motion: reduce) {
@@ -296,6 +395,18 @@
     const brand = document.getElementById("brand");
     const replayBtn = document.getElementById("replay");
     const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    const narrow = window.matchMedia("(max-width: 640px)").matches;
+
+    const TITLE = {
+      stage: narrow ? "Your tab is the stage" : "Your tab is the stage…",
+      start: narrow ? "Start from the toolbar" : "Start a session from the toolbar",
+      countdown: narrow
+        ? "Countdown, then record"
+        : "A brief countdown — then recording begins",
+      session: narrow ? "Session bar keeps time" : "Work as usual. A session bar keeps time.",
+      save: narrow ? "Stop & save as MP4" : "Stop & save — your session downloads as MP4",
+      end: "Intent captured.",
+    };
 
     const registry = {
       strokes: {},
@@ -637,7 +748,7 @@
         });
         Object.values(registry.fills).forEach((el) => el.classList.add("visible"));
         brand.classList.add("visible");
-        phaseTitle.textContent = "Intent captured.";
+        phaseTitle.textContent = TITLE.end;
         phaseTitle.classList.add("visible");
         replayBtn.classList.add("revealed");
         return;
@@ -647,7 +758,7 @@
       brand.classList.add("visible");
       await wait(400);
 
-      await setTitle("Your tab is the stage…");
+      await setTitle(TITLE.stage);
       await ink(registry.strokes.chrome, 900);
       showFill("pageFill");
       await ink(registry.strokes.toolbar, 280);
@@ -662,7 +773,7 @@
       showLabel("tagCapture");
       await wait(500);
 
-      await setTitle("Start a session from the toolbar");
+      await setTitle(TITLE.start);
       await ink(registry.strokes.extIcon, 500);
       showFill("infMark");
       await wait(650);
@@ -673,19 +784,19 @@
       }
       hideLabel("tagCapture");
 
-      await setTitle("A brief countdown — then recording begins");
+      await setTitle(TITLE.countdown);
       showLabel("tagCountdown");
       await showCountdown();
       hideLabel("tagCountdown");
 
-      await setTitle("Work as usual. A session bar keeps time.");
+      await setTitle(TITLE.session);
       await ink(registry.strokes.sessionBar, 700);
       await ink(registry.strokes.recDot, 320);
       showLabel("timerLabel");
       showLabel("stopLabel");
       await wait(900);
 
-      await setTitle("Stop & save — your session downloads as MP4");
+      await setTitle(TITLE.save);
       // Dim session UI, reveal file
       registry.strokes.sessionBar.style.opacity = "0.2";
       registry.strokes.recDot.style.opacity = "0.2";
@@ -701,7 +812,7 @@
       showLabel("tagSave");
       await wait(700);
 
-      await setTitle("Intent captured.");
+      await setTitle(TITLE.end);
       replayBtn.classList.add("revealed");
     }
 
