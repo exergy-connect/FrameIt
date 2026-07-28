@@ -171,6 +171,25 @@
 
     .fill-fade.visible { opacity: 1; }
 
+    .file-inf {
+      fill: none;
+      stroke: #7eb6e8;
+      stroke-width: 3.2;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+      opacity: 0;
+      filter: url(#infGlow);
+      transition: opacity 0.45s ease;
+    }
+
+    .file-inf.core {
+      stroke: #c5daf0;
+      stroke-width: 1.6;
+      filter: none;
+    }
+
+    .file-inf.visible { opacity: 1; }
+
     .label {
       font-family: "Outfit", sans-serif;
       font-size: 15px;
@@ -247,7 +266,7 @@
 
     @media (prefers-reduced-motion: reduce) {
       .stroke { stroke-dashoffset: 0; opacity: 1; }
-      .label, .brand, .phase, .control, .fill-fade, .countdown-num { opacity: 1; }
+      .label, .brand, .phase, .control, .fill-fade, .countdown-num, .file-inf { opacity: 1; }
       .countdown-num { display: none; }
     }
   </style>
@@ -374,6 +393,26 @@
     grad.appendChild(svgEl("stop", { offset: "45%", "stop-color": "#5a8ec4" }));
     grad.appendChild(svgEl("stop", { offset: "100%", "stop-color": "#1e3a58" }));
     defs.appendChild(grad);
+
+    const glow = svgEl("filter", {
+      id: "infGlow",
+      x: "-80%",
+      y: "-80%",
+      width: "260%",
+      height: "260%",
+    });
+    glow.appendChild(svgEl("feGaussianBlur", {
+      in: "SourceGraphic",
+      stdDeviation: "3.5",
+      result: "blur",
+    }));
+    const glowMerge = svgEl("feMerge");
+    glowMerge.appendChild(svgEl("feMergeNode", { in: "blur" }));
+    glowMerge.appendChild(svgEl("feMergeNode", { in: "blur" }));
+    glowMerge.appendChild(svgEl("feMergeNode", { in: "SourceGraphic" }));
+    glow.appendChild(glowMerge);
+    defs.appendChild(glow);
+
     svg.insertBefore(defs, svg.firstChild);
     svg.appendChild(inf);
     registry.fills.infMark = inf;
@@ -433,10 +472,40 @@
        H ${file.x + file.w}`,
       "stroke ok",
     );
+
+    // Centered glowing ∞ on the file artifact
+    const fcx = file.x + file.w / 2;
+    const fcy = file.y + file.h / 2 + 8;
+    function infinityPath(cx, cy, s) {
+      // Bernoulli-like ∞ scaled around (cx, cy); s ≈ half-width
+      return `M ${cx} ${cy}
+        C ${cx - 0.3 * s} ${cy - 0.72 * s} ${cx - 0.9 * s} ${cy - 0.95 * s} ${cx - 1.15 * s} ${cy - 0.5 * s}
+        C ${cx - 1.4 * s} ${cy - 0.05 * s} ${cx - 1.2 * s} ${cy + 0.65 * s} ${cx - 0.75 * s} ${cy + 0.65 * s}
+        C ${cx - 0.3 * s} ${cy + 0.65 * s} ${cx - 0.08 * s} ${cy + 0.2 * s} ${cx} ${cy}
+        C ${cx + 0.08 * s} ${cy + 0.2 * s} ${cx + 0.3 * s} ${cy + 0.65 * s} ${cx + 0.75 * s} ${cy + 0.65 * s}
+        C ${cx + 1.2 * s} ${cy + 0.65 * s} ${cx + 1.4 * s} ${cy - 0.05 * s} ${cx + 1.15 * s} ${cy - 0.5 * s}
+        C ${cx + 0.9 * s} ${cy - 0.95 * s} ${cx + 0.3 * s} ${cy - 0.72 * s} ${cx} ${cy}`;
+    }
+    const fileInf = svgEl("path", {
+      id: "fileInf",
+      class: "file-inf",
+      d: infinityPath(fcx, fcy, 22),
+    });
+    // Soft core stroke under the glow for a brighter center
+    const fileInfCore = svgEl("path", {
+      id: "fileInfCore",
+      class: "file-inf core",
+      d: infinityPath(fcx, fcy, 22),
+    });
+    svg.appendChild(fileInf);
+    svg.appendChild(fileInfCore);
+    registry.fills.fileInf = fileInf;
+    registry.fills.fileInfCore = fileInfCore;
+
     addLabel("fileLabel", "session.mp4", file.x + 8, file.y + file.h + 28, "label");
     addLabel("tagCapture", "Capturing browser context", 180, 178, "label muted");
     addLabel("tagCountdown", "Countdown → Record", 455, 250, "label muted");
-    addLabel("tagSave", "downloads to your machine", 455, 340, "label muted");
+    addLabel("tagSave", "downloads to your machine", 430, 340, "label muted");
 
     // Soft page fill behind content (revealed with browser)
     const pageFill = svgEl("rect", {
@@ -620,6 +689,8 @@
         registry.strokes[`line${i}`].style.opacity = "0.08";
       }
       await ink(registry.strokes.file, 900);
+      showFill("fileInf");
+      showFill("fileInfCore");
       showLabel("fileLabel");
       showLabel("tagSave");
       await wait(700);
