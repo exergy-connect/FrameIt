@@ -1,6 +1,6 @@
 # Exergy ∞ Frame
 
-<img src="exergy_connect_logo.png" alt="Exergy Connect" width="72" height="72" />
+<img src="extension/assets/exergy_connect_logo.png" alt="Exergy Connect" width="72" height="72" align="right" />
 
 **Exergy ∞ Frame** is a minimal Chrome extension that captures an MP4 (or WebM fallback) of the current tab’s web session: a brief countdown, a session bar with a live timer, then Stop & save to Downloads.
 
