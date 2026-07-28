@@ -53,6 +53,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     }
     startSession({
       includeLogo: message.includeLogo !== false,
+      logoDataUrl: normalizeLogoDataUrl(message.logoDataUrl),
       hideControls: message.hideControls !== false,
       includePointer: Boolean(message.includePointer),
     })
@@ -122,6 +123,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
 async function startSession({
   includeLogo = true,
+  logoDataUrl = null,
   hideControls = true,
   includePointer = false,
 } = {}) {
@@ -152,6 +154,7 @@ async function startSession({
     phase: "acquiring",
     mimeType: "",
     includeLogo: Boolean(includeLogo),
+    logoDataUrl: includeLogo ? normalizeLogoDataUrl(logoDataUrl) : null,
     hideControls: Boolean(hideControls),
     includePointer: Boolean(includePointer),
     paused: false,
@@ -205,6 +208,7 @@ async function onCountdownDone() {
     type: "frameit-show-session-bar",
     startedAt: session.recordingStartedAt,
     includeLogo: session.includeLogo !== false,
+    logoDataUrl: session.logoDataUrl || null,
     hideControls: session.hideControls !== false,
     includePointer: Boolean(session.includePointer),
   });
@@ -441,6 +445,14 @@ function sendToOffscreen(message) {
 
 function delay(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function normalizeLogoDataUrl(value) {
+  if (typeof value !== "string") return null;
+  if (!value.startsWith("data:image/")) return null;
+  // Keep message payloads bounded; popup already enforces ~500 KB files.
+  if (value.length > 700_000) return null;
+  return value;
 }
 
 function buildFilename(tabTitle, date, extension) {

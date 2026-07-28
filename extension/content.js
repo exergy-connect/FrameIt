@@ -52,6 +52,7 @@
       recordingStartedAt = message.startedAt || Date.now();
       showSessionBar({
         includeLogo: message.includeLogo !== false,
+        logoDataUrl: normalizeLogoDataUrl(message.logoDataUrl),
         hideControls: message.hideControls !== false,
         includePointer: Boolean(message.includePointer),
       });
@@ -143,6 +144,7 @@
 
   function showSessionBar({
     includeLogo = true,
+    logoDataUrl = null,
     hideControls = true,
     includePointer = false,
   } = {}) {
@@ -158,11 +160,13 @@
     sessionUi = null;
 
     if (includeLogo) {
-      const logoUrl = chrome.runtime.getURL("assets/exergy_connect_logo.png");
+      const customLogo = normalizeLogoDataUrl(logoDataUrl);
+      const logoUrl =
+        customLogo || chrome.runtime.getURL("assets/exergy_connect_logo.png");
       const watermark = document.createElement("img");
       watermark.className = "frameit-watermark";
       watermark.src = logoUrl;
-      watermark.alt = "Exergy Connect";
+      watermark.alt = customLogo ? "Recording logo" : "Exergy Connect";
       watermark.width = 48;
       watermark.height = 48;
       root.appendChild(watermark);
@@ -445,5 +449,11 @@
 
   function delay(ms) {
     return new Promise((resolve) => window.setTimeout(resolve, ms));
+  }
+
+  function normalizeLogoDataUrl(value) {
+    return typeof value === "string" && value.startsWith("data:image/")
+      ? value
+      : null;
   }
 })();

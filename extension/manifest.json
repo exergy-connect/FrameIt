@@ -25,7 +25,8 @@
     "offscreen",
     "downloads",
     "activeTab",
-    "scripting"
+    "scripting",
+    "storage"
   ],
   "host_permissions": ["<all_urls>"],
   "web_accessible_resources": [

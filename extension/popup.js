@@ -1,8 +1,17 @@
+const DEFAULT_LOGO_URL = "assets/exergy_connect_logo.png";
+const LOGO_STORAGE_KEY = "customLogoDataUrl";
+const MAX_LOGO_BYTES = 500_000;
+
 const startBtn = document.getElementById("start");
 const pauseBtn = document.getElementById("pause");
 const stopBtn = document.getElementById("stop");
 const statusEl = document.getElementById("status");
 const includeLogoEl = document.getElementById("includeLogo");
+const logoOptionsEl = document.getElementById("logoOptions");
+const logoPreviewEl = document.getElementById("logoPreview");
+const chooseLogoBtn = document.getElementById("chooseLogo");
+const resetLogoBtn = document.getElementById("resetLogo");
+const logoFileEl = document.getElementById("logoFile");
 const hideControlsEl = document.getElementById("hideControls");
 const includePointerEl = document.getElementById("includePointer");
 const activeSessionEl = document.getElementById("activeSession");
@@ -10,8 +19,48 @@ const activeTimeEl = document.getElementById("activeTime");
 
 let timerId = null;
 let statusSnapshot = null;
+let customLogoDataUrl = null;
 
+initLogoSettings();
 refreshStatus();
+
+includeLogoEl.addEventListener("change", syncLogoOptionsVisibility);
+
+chooseLogoBtn.addEventListener("click", () => {
+  logoFileEl.click();
+});
+
+resetLogoBtn.addEventListener("click", async () => {
+  customLogoDataUrl = null;
+  await chrome.storage.local.remove(LOGO_STORAGE_KEY);
+  applyLogoPreview();
+  setStatus("Using the Exergy logo.");
+});
+
+logoFileEl.addEventListener("change", async () => {
+  const file = logoFileEl.files?.[0];
+  logoFileEl.value = "";
+  if (!file) return;
+
+  if (!file.type.startsWith("image/")) {
+    setStatus("Please choose an image file.", true);
+    return;
+  }
+  if (file.size > MAX_LOGO_BYTES) {
+    setStatus("Logo must be 500 KB or smaller.", true);
+    return;
+  }
+
+  try {
+    const dataUrl = await readFileAsDataUrl(file);
+    customLogoDataUrl = dataUrl;
+    await chrome.storage.local.set({ [LOGO_STORAGE_KEY]: dataUrl });
+    applyLogoPreview();
+    setStatus("Custom logo saved.");
+  } catch (error) {
+    setStatus(String(error?.message || error), true);
+  }
+});
 
 startBtn.addEventListener("click", async () => {
   startBtn.disabled = true;
@@ -21,6 +70,7 @@ startBtn.addEventListener("click", async () => {
     const result = await chrome.runtime.sendMessage({
       type: "frameit-start-session",
       includeLogo: includeLogoEl.checked,
+      logoDataUrl: includeLogoEl.checked ? customLogoDataUrl : null,
       hideControls: hideControlsEl.checked,
       includePointer: includePointerEl.checked,
     });
@@ -77,6 +127,30 @@ stopBtn.addEventListener("click", async () => {
   }
 });
 
+async function initLogoSettings() {
+  try {
+    const stored = await chrome.storage.local.get(LOGO_STORAGE_KEY);
+    const value = stored?.[LOGO_STORAGE_KEY];
+    customLogoDataUrl =
+      typeof value === "string" && value.startsWith("data:image/")
+        ? value
+        : null;
+  } catch (_error) {
+    customLogoDataUrl = null;
+  }
+  applyLogoPreview();
+  syncLogoOptionsVisibility();
+}
+
+function applyLogoPreview() {
+  logoPreviewEl.src = customLogoDataUrl || DEFAULT_LOGO_URL;
+  resetLogoBtn.hidden = !customLogoDataUrl;
+}
+
+function syncLogoOptionsVisibility() {
+  logoOptionsEl.hidden = !includeLogoEl.checked;
+}
+
 async function refreshStatus() {
   try {
     const result = await chrome.runtime.sendMessage({
@@ -99,17 +173,13 @@ function showIdle() {
   clearTimer();
   startBtn.hidden = false;
   startBtn.disabled = false;
-  includeLogoEl.disabled = false;
-  hideControlsEl.disabled = false;
-  includePointerEl.disabled = false;
+  setOptionsDisabled(false);
   activeSessionEl.hidden = true;
 }
 
 function showActive(status) {
   startBtn.hidden = true;
-  includeLogoEl.disabled = true;
-  hideControlsEl.disabled = true;
-  includePointerEl.disabled = true;
+  setOptionsDisabled(true);
   activeSessionEl.hidden = false;
   activeSessionEl.classList.toggle("is-paused", Boolean(status.paused));
 
@@ -129,6 +199,15 @@ function showActive(status) {
     activeTimeEl.textContent = "…";
     clearTimer();
   }
+}
+
+function setOptionsDisabled(disabled) {
+  includeLogoEl.disabled = disabled;
+  hideControlsEl.disabled = disabled;
+  includePointerEl.disabled = disabled;
+  chooseLogoBtn.disabled = disabled;
+  resetLogoBtn.disabled = disabled;
+  logoFileEl.disabled = disabled;
 }
 
 function updateActiveTime(status) {
@@ -169,4 +248,16 @@ function formatElapsed(ms) {
 function setStatus(text, isError = false) {
   statusEl.textContent = text;
   statusEl.classList.toggle("error", Boolean(isError));
+}
+
+function readFileAsDataUrl(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      if (typeof reader.result === "string") resolve(reader.result);
+      else reject(new Error("Could not read the image."));
+    };
+    reader.onerror = () => reject(new Error("Could not read the image."));
+    reader.readAsDataURL(file);
+  });
 }

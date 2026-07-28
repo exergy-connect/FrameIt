@@ -181,6 +181,46 @@
         flex-shrink: 0;
       }
 
+      .logo-options {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        margin: -4px 0 0 26px;
+      }
+
+      .logo-options[hidden] {
+        display: none;
+      }
+
+      .logo-preview {
+        width: 36px;
+        height: 36px;
+        object-fit: contain;
+        border-radius: 6px;
+        background: rgba(197, 218, 240, 0.08);
+        border: 1px solid var(--line);
+        flex-shrink: 0;
+      }
+
+      .logo-actions {
+        display: grid;
+        gap: 6px;
+        min-width: 0;
+        flex: 1;
+      }
+
+      .logo-actions button {
+        width: 100%;
+        padding: 7px 10px;
+        font-size: 12px;
+        font-weight: 600;
+        border-radius: 8px;
+      }
+
+      .logo-actions button:disabled {
+        opacity: 0.55;
+      }
+
       .status {
         min-height: 1.2em;
         font-size: 12px;
@@ -228,8 +268,32 @@
 
       <label class="option" for="includeLogo">
         <input id="includeLogo" type="checkbox" checked />
-        <span>Include Exergy logo in recording (top right)</span>
+        <span>Include logo in recording (top right)</span>
       </label>
+      <div id="logoOptions" class="logo-options">
+        <img
+          id="logoPreview"
+          class="logo-preview"
+          src="assets/exergy_connect_logo.png"
+          alt="Recording logo preview"
+          width="36"
+          height="36"
+        />
+        <div class="logo-actions">
+          <button id="chooseLogo" type="button" class="secondary">
+            Choose custom logo…
+          </button>
+          <button id="resetLogo" type="button" class="secondary" hidden>
+            Use Exergy logo
+          </button>
+        </div>
+        <input
+          id="logoFile"
+          type="file"
+          accept="image/png,image/jpeg,image/webp,image/gif,image/svg+xml"
+          hidden
+        />
+      </div>
 
       <label class="option" for="hideControls">
         <input id="hideControls" type="checkbox" checked />
