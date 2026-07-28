@@ -35,11 +35,12 @@ It is the first conceptual twin.
 - Record the current browser tab
 - Capture tab audio together with video
 - Save directly as MP4
+- Customize the recording logo
 - Lightweight implementation using standard browser APIs
 - No desktop recording
 - No unnecessary UI
 
-Optional controls stay available when you need them: hide the on-page session bar from the video, pause/stop from the popup or keyboard (**P** / **S**), include a logo watermark (Exergy by default, or your own image), and optionally draw a captureable mouse pointer.
+Optional controls stay available when you need them: hide the on-page session bar from the video, pause/stop from the popup or keyboard (**P** / **S**), and optionally draw a captureable mouse pointer.
 
 Typical size is about **0.3–1 MB per second** (~18–60 MB per minute), depending on resolution, motion, and audio.
 
