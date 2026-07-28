@@ -1,0 +1,145 @@
+#frameit-root {
+  all: initial;
+  position: fixed;
+  inset: 0;
+  z-index: 2147483646;
+  pointer-events: none;
+  font-family: "Segoe UI", "Helvetica Neue", Helvetica, Arial, sans-serif;
+}
+
+#frameit-root * {
+  box-sizing: border-box;
+}
+
+.frameit-countdown {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(8, 12, 18, 0.55);
+  pointer-events: none;
+}
+
+.frameit-countdown__card {
+  min-width: 180px;
+  padding: 28px 36px;
+  border-radius: 16px;
+  text-align: center;
+  color: #e8eef5;
+  background: linear-gradient(160deg, #1a2430 0%, #0f1419 100%);
+  box-shadow: 0 18px 48px rgba(0, 0, 0, 0.35);
+}
+
+.frameit-countdown__logo {
+  display: block;
+  width: 56px;
+  height: 56px;
+  margin: 0 auto 12px;
+  border-radius: 12px;
+  background: #fff;
+  object-fit: contain;
+}
+
+.frameit-countdown__brand {
+  font-size: 13px;
+  letter-spacing: 0.04em;
+  opacity: 0.85;
+  margin-bottom: 8px;
+}
+
+.frameit-countdown__number {
+  font-size: 72px;
+  font-weight: 650;
+  line-height: 1;
+  background: linear-gradient(120deg, #c5daf0, #5a8ec4 45%, #1e3a58);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+.frameit-countdown__label {
+  margin-top: 10px;
+  font-size: 14px;
+  opacity: 0.75;
+}
+
+.frameit-session-bar {
+  position: absolute;
+  left: 50%;
+  bottom: 24px;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  padding: 10px 12px 10px 16px;
+  border-radius: 999px;
+  color: #e8eef5;
+  background: rgba(15, 20, 25, 0.92);
+  border: 1px solid rgba(197, 218, 240, 0.18);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.28);
+  pointer-events: auto;
+}
+
+.frameit-session-bar__left {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  white-space: nowrap;
+}
+
+.frameit-session-bar__dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: #e25555;
+  box-shadow: 0 0 0 0 rgba(226, 85, 85, 0.55);
+  animation: frameit-pulse 1.4s ease-out infinite;
+}
+
+.frameit-session-bar__title {
+  font-size: 13px;
+  opacity: 0.9;
+}
+
+.frameit-session-bar__time {
+  font-variant-numeric: tabular-nums;
+  font-size: 14px;
+  font-weight: 600;
+  min-width: 3.5em;
+}
+
+.frameit-session-bar__stop {
+  appearance: none;
+  border: 0;
+  cursor: pointer;
+  border-radius: 999px;
+  padding: 8px 14px;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  color: #0f1419;
+  background: linear-gradient(120deg, #c5daf0, #8eb4d8);
+}
+
+.frameit-session-bar__stop:disabled {
+  opacity: 0.7;
+  cursor: default;
+}
+
+.frameit-session-bar__stop:focus-visible {
+  outline: 2px solid #c5daf0;
+  outline-offset: 2px;
+}
+
+@keyframes frameit-pulse {
+  0% {
+    box-shadow: 0 0 0 0 rgba(226, 85, 85, 0.55);
+  }
+  70% {
+    box-shadow: 0 0 0 10px rgba(226, 85, 85, 0);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(226, 85, 85, 0);
+  }
+}

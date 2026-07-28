@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Exergy ∞ FrameIt</title>
+    <link rel="icon" href="assets/favicon.ico" sizes="any" />
+    <link rel="icon" href="assets/favicon.svg" type="image/svg+xml" />
+    <style>
+      :root {
+        color-scheme: dark;
+        --bg0: #0f1419;
+        --bg1: #1a2430;
+        --text: #e8eef5;
+        --muted: #9aafc2;
+        --line: rgba(197, 218, 240, 0.18);
+        --accent0: #c5daf0;
+        --accent1: #5a8ec4;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        width: 320px;
+        font-family: "Segoe UI", "Helvetica Neue", Helvetica, Arial, sans-serif;
+        color: var(--text);
+        background: linear-gradient(165deg, var(--bg1), var(--bg0));
+      }
+
+      main {
+        padding: 16px;
+        display: grid;
+        gap: 14px;
+      }
+
+      .brand {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+      }
+
+      .brand img.logo {
+        width: 44px;
+        height: 44px;
+        border-radius: 10px;
+        background: #fff;
+      }
+
+      .brand img.mark {
+        width: 28px;
+        height: 28px;
+      }
+
+      .brand-text {
+        display: grid;
+        gap: 2px;
+        min-width: 0;
+      }
+
+      .brand-text h1 {
+        margin: 0;
+        font-size: 15px;
+        font-weight: 650;
+        letter-spacing: 0.01em;
+      }
+
+      .brand-text p {
+        margin: 0;
+        font-size: 12px;
+        color: var(--muted);
+      }
+
+      .marks {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin-left: auto;
+      }
+
+      button {
+        appearance: none;
+        width: 100%;
+        border: 0;
+        border-radius: 10px;
+        padding: 12px 14px;
+        font: inherit;
+        font-size: 14px;
+        font-weight: 650;
+        cursor: pointer;
+        color: var(--bg0);
+        background: linear-gradient(120deg, var(--accent0), var(--accent1));
+      }
+
+      button:disabled {
+        opacity: 0.65;
+        cursor: default;
+      }
+
+      .status {
+        min-height: 1.2em;
+        font-size: 12px;
+        color: var(--muted);
+      }
+
+      .status.error {
+        color: #f0a0a0;
+      }
+
+      .hint {
+        margin: 0;
+        font-size: 12px;
+        line-height: 1.45;
+        color: var(--muted);
+        padding-top: 4px;
+        border-top: 1px solid var(--line);
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <div class="brand">
+        <img
+          class="logo"
+          src="assets/exergy_connect_logo.png"
+          alt="Exergy Connect"
+          width="44"
+          height="44"
+        />
+        <div class="brand-text">
+          <h1>Exergy ∞ FrameIt</h1>
+          <p>Capture this tab’s web session</p>
+        </div>
+        <div class="marks">
+          <img
+            class="mark"
+            src="assets/favicon.svg"
+            alt=""
+            width="28"
+            height="28"
+          />
+        </div>
+      </div>
+
+      <button id="start" type="button">Start session</button>
+      <div id="status" class="status" role="status"></div>
+      <p class="hint">
+        A 3-second countdown appears on the tab, then a session bar with the
+        timer. Stop &amp; save downloads the recording to your Downloads folder.
+      </p>
+    </main>
+    <script src="popup.js"></script>
+  </body>
+</html>

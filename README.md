@@ -1,0 +1,71 @@
+# Exergy ∞ FrameIt
+
+<img src="exergy_connect_logo.png" alt="Exergy Connect" width="72" height="72" />
+
+**Exergy ∞ FrameIt** is a minimal Chrome extension that captures an MP4 (or WebM fallback) of the current tab’s web session: a brief countdown, a session bar with a live timer, then Stop & save to Downloads.
+
+## Load unpacked
+
+1. Open Chrome → **Extensions** → enable **Developer mode**
+2. Click **Load unpacked**
+3. Select the [`extension/`](extension/) directory in this repository
+
+## Usage
+
+1. Open the website tab you want to capture
+2. Click the Exergy ∞ FrameIt toolbar icon → **Start session**
+3. Watch the on-page countdown (3 → 2 → 1)
+4. Use the session bar timer while you work; click **Stop & save** when done
+5. The recording downloads as `{tab title} {YYYY-MM-DD HH:MM}.mp4` (or `.webm` if MP4 is unavailable)
+
+## Session flow
+
+Start acquires the tab stream and prepares the offscreen recorder before the countdown. Encoding begins only after the countdown finishes so the digits are not recorded. Stop finalizes the blob and saves it to Downloads.
+
+```mermaid
+sequenceDiagram
+  participant User
+  participant Popup
+  participant SW as ServiceWorker
+  participant CS as ContentOverlay
+  participant OS as OffscreenRecorder
+
+  User->>Popup: Start session
+  Popup->>SW: startSession
+  SW->>SW: get active tab + title
+  SW->>SW: tabCapture.getMediaStreamId
+  SW->>OS: create offscreen + streamId
+  OS->>OS: getUserMedia chromeMediaSource tab
+  SW->>CS: inject countdown
+  CS-->>SW: countdownDone
+  SW->>OS: startRecording
+  SW->>CS: showSessionBar
+  User->>CS: Stop
+  CS->>SW: stopSession
+  SW->>OS: stopRecording
+  OS-->>SW: blob + mime
+  SW->>SW: downloads.download(title + datetime)
+  SW->>CS: teardown overlays
+```
+
+### Walkthrough
+
+1. **Start** — The popup asks the service worker to begin a session on the active tab.
+2. **Acquire** — The worker obtains a `tabCapture` stream id, opens an offscreen document, and the recorder calls `getUserMedia` with the tab media source (video + tab audio when available). Tab audio is also routed to the local `AudioContext` so you can still hear the page.
+3. **Countdown** — A content overlay counts down for about three seconds.
+4. **Record** — After the overlay clears, `MediaRecorder` starts (MP4 when the browser can actually record it; otherwise WebM).
+5. **Stop & save** — The session bar stops the recorder; the file is named from the tab title plus the session date/time and saved via `chrome.downloads`.
+
+## Notes
+
+- Chrome only (Manifest V3). Restricted pages such as `chrome://` URLs cannot be captured.
+- Prefer native `MediaRecorder` MP4 (`video/mp4`). If MP4 is advertised but fails to start, or is unsupported, the extension falls back to WebM and uses a `.webm` extension (it never mislabels WebM as MP4).
+- No npm runtime dependencies; the extension is plain HTML/CSS/JS.
+
+## Brand assets
+
+Packaged under [`extension/assets/`](extension/assets/) from the repo root:
+
+- `favicon.ico`
+- `favicon.svg`
+- `exergy_connect_logo.png`
