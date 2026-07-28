@@ -45,7 +45,6 @@
       .brand img.logo {
         width: 44px;
         height: 44px;
-        border-radius: 10px;
         background: #fff;
       }
 
@@ -97,6 +96,71 @@
       button:disabled {
         opacity: 0.65;
         cursor: default;
+      }
+
+      button.secondary {
+        color: var(--text);
+        background: rgba(197, 218, 240, 0.14);
+        border: 1px solid var(--line);
+      }
+
+      button.danger {
+        color: #f4f7fb;
+        background: linear-gradient(120deg, #d96a6a, #b84242);
+      }
+
+      .active-session {
+        display: grid;
+        gap: 10px;
+      }
+
+      .active-session[hidden] {
+        display: none;
+      }
+
+      .active-session__row {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        font-size: 13px;
+      }
+
+      .active-session__dot {
+        width: 10px;
+        height: 10px;
+        border-radius: 50%;
+        background: #e25555;
+        box-shadow: 0 0 0 0 rgba(226, 85, 85, 0.55);
+        animation: frameit-pulse 1.4s ease-out infinite;
+        flex-shrink: 0;
+      }
+
+      .active-session.is-paused .active-session__dot {
+        background: #e0a84a;
+        animation: none;
+        box-shadow: none;
+      }
+
+      .active-session__time {
+        font-variant-numeric: tabular-nums;
+        font-weight: 650;
+        font-size: 15px;
+      }
+
+      .active-session__actions {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 8px;
+      }
+
+      .active-session__actions button {
+        width: 100%;
+      }
+
+      @keyframes frameit-pulse {
+        0% { box-shadow: 0 0 0 0 rgba(226, 85, 85, 0.55); }
+        70% { box-shadow: 0 0 0 10px rgba(226, 85, 85, 0); }
+        100% { box-shadow: 0 0 0 0 rgba(226, 85, 85, 0); }
       }
 
       .option {
@@ -166,11 +230,34 @@
         <span>Include Exergy logo in recording (top right)</span>
       </label>
 
+      <label class="option" for="hideControls">
+        <input id="hideControls" type="checkbox" checked />
+        <span>Hide recording controls from the video</span>
+      </label>
+
+      <label class="option" for="includePointer">
+        <input id="includePointer" type="checkbox" />
+        <span>Include mouse pointer in recording</span>
+      </label>
+
       <button id="start" type="button">Start session</button>
+
+      <div id="activeSession" class="active-session" hidden>
+        <div class="active-session__row">
+          <span class="active-session__dot" aria-hidden="true"></span>
+          <span id="activeTime" class="active-session__time">00:00</span>
+        </div>
+        <div class="active-session__actions">
+          <button id="pause" type="button" class="secondary">Pause</button>
+          <button id="stop" type="button" class="danger">Stop &amp; save</button>
+        </div>
+      </div>
+
       <div id="status" class="status" role="status"></div>
       <p class="hint">
-        A 3-second countdown appears on the tab, then a session bar with the
-        timer. Stop &amp; save downloads the recording to your Downloads folder.
+        A 3-second countdown appears on the tab, then recording begins. If
+        controls are hidden from the video, reopen this popup to pause or
+        stop &amp; save.
       </p>
     </main>
     <script src="popup.js"></script>

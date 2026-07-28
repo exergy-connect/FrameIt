@@ -1,15 +1,15 @@
 {
   "manifest_version": 3,
-  "name": "Exergy ∞ Frame",
+  "name": "Exergy ∞ xFrame",
   "version": "1.0.0",
-  "description": "Exergy ∞ Frame captures the context around your digital experience. Record your current web session as an audio and video MP4 with a brief countdown and simple recording controls.",
+  "description": "Exergy ∞ xFrame captures a web session as an audio and video MP4. Record your browsing session with simple controls.",
   "icons": {
     "16": "icons/icon16.png",
     "48": "icons/icon48.png",
     "128": "icons/icon128.png"
   },
   "action": {
-    "default_title": "Exergy ∞ Frame",
+    "default_title": "Exergy ∞ xFrame",
     "default_popup": "popup.html",
     "default_icon": {
       "16": "icons/icon16.png",

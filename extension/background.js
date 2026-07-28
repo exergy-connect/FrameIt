@@ -53,6 +53,8 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     }
     startSession({
       includeLogo: message.includeLogo !== false,
+      hideControls: message.hideControls !== false,
+      includePointer: Boolean(message.includePointer),
     })
       .then(() => sendResponse({ ok: true }))
       .catch((error) =>
@@ -106,6 +108,11 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       ok: true,
       active: Boolean(session),
       phase: session?.phase || null,
+      paused: Boolean(session?.paused),
+      recordingStartedAt: session?.recordingStartedAt || null,
+      pausedAt: session?.pausedAt || null,
+      totalPausedMs: session?.totalPausedMs || 0,
+      hideControls: session?.hideControls !== false,
     });
     return false;
   }
@@ -113,7 +120,11 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   return false;
 });
 
-async function startSession({ includeLogo = true } = {}) {
+async function startSession({
+  includeLogo = true,
+  hideControls = true,
+  includePointer = false,
+} = {}) {
   if (session) {
     throw new Error("A session is already in progress");
   }
@@ -141,6 +152,11 @@ async function startSession({ includeLogo = true } = {}) {
     phase: "acquiring",
     mimeType: "",
     includeLogo: Boolean(includeLogo),
+    hideControls: Boolean(hideControls),
+    includePointer: Boolean(includePointer),
+    paused: false,
+    pausedAt: 0,
+    totalPausedMs: 0,
   };
 
   try {
@@ -180,12 +196,16 @@ async function onCountdownDone() {
   session.mimeType = started.mimeType || "";
   session.phase = "recording";
   session.paused = false;
+  session.pausedAt = 0;
+  session.totalPausedMs = 0;
   session.recordingStartedAt = Date.now();
 
   await chrome.tabs.sendMessage(session.tabId, {
     type: "frameit-show-session-bar",
     startedAt: session.recordingStartedAt,
     includeLogo: session.includeLogo !== false,
+    hideControls: session.hideControls !== false,
+    includePointer: Boolean(session.includePointer),
   });
 }
 
@@ -200,6 +220,7 @@ async function pauseSession() {
   }
 
   session.paused = true;
+  session.pausedAt = Date.now();
 }
 
 async function resumeSession() {
@@ -212,6 +233,11 @@ async function resumeSession() {
     throw new Error(resumed?.error || "Failed to resume recording");
   }
 
+  if (session.pausedAt) {
+    session.totalPausedMs =
+      (session.totalPausedMs || 0) + (Date.now() - session.pausedAt);
+  }
+  session.pausedAt = 0;
   session.paused = false;
 }
 

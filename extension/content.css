@@ -36,7 +36,6 @@
   width: 56px;
   height: 56px;
   margin: 0 auto 12px;
-  border-radius: 12px;
   background: #fff;
   object-fit: contain;
 }
@@ -70,11 +69,31 @@
   right: 16px;
   width: 48px;
   height: 48px;
-  border-radius: 10px;
   background: #fff;
   object-fit: contain;
   pointer-events: none;
   box-shadow: 0 6px 18px rgba(0, 0, 0, 0.28);
+}
+
+.frameit-pointer {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 24px;
+  height: 24px;
+  pointer-events: none;
+  opacity: 0;
+  z-index: 2147483647;
+  filter: drop-shadow(0 2px 3px rgba(0, 0, 0, 0.45));
+  will-change: transform;
+}
+
+.frameit-pointer.is-visible {
+  opacity: 1;
+}
+
+.frameit-pointer svg {
+  display: block;
 }
 
 .frameit-session-bar {

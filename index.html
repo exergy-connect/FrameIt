@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Exergy Frame</title>
+  <title>Exergy xFrame</title>
   <link rel="icon" href="extension/assets/favicon.ico" sizes="any" />
   <link rel="icon" href="extension/assets/favicon.svg" type="image/svg+xml" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
@@ -33,6 +33,7 @@
       color: var(--text);
       font-family: "Outfit", sans-serif;
       overflow: hidden;
+      padding-bottom: 4.5rem;
       background:
         radial-gradient(ellipse at 18% 12%, rgba(90, 142, 196, 0.28) 0%, transparent 48%),
         radial-gradient(ellipse at 88% 78%, rgba(30, 58, 88, 0.55) 0%, transparent 50%),
@@ -64,7 +65,6 @@
     .brand img {
       width: 42px;
       height: 42px;
-      border-radius: 10px;
       background: #fff;
       box-shadow: 0 6px 18px rgba(0, 0, 0, 0.35);
     }
@@ -222,11 +222,40 @@
       animation: countPop 0.55s cubic-bezier(0.34, 1.4, 0.64, 1) forwards;
     }
 
-    .control {
+    .controls {
       position: absolute;
       bottom: 0;
       left: 50%;
       transform: translateX(-50%);
+      z-index: 3;
+    }
+
+    .audio-dock {
+      position: fixed;
+      left: 50%;
+      bottom: 1rem;
+      transform: translateX(-50%);
+      z-index: 20;
+      width: min(92vw, 420px);
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.4s ease;
+    }
+
+    .audio-dock.revealed {
+      opacity: 1;
+      pointer-events: auto;
+    }
+
+    .audio-dock audio {
+      width: 100%;
+      height: 40px;
+      border-radius: 999px;
+      accent-color: var(--accent1);
+      color-scheme: dark;
+    }
+
+    .control {
       appearance: none;
       border: 1px solid var(--line);
       background: linear-gradient(120deg, var(--accent0), var(--accent1));
@@ -245,7 +274,7 @@
 
     .control:hover {
       filter: brightness(1.08);
-      transform: translateX(-50%) translateY(-1px);
+      transform: translateY(-1px);
     }
 
     .control.revealed {
@@ -266,21 +295,24 @@
 
     @media (prefers-reduced-motion: reduce) {
       .stroke { stroke-dashoffset: 0; opacity: 1; }
-      .label, .brand, .phase, .control, .fill-fade, .countdown-num, .file-inf { opacity: 1; }
+      .label, .brand, .phase, .control, .audio-dock, .fill-fade, .countdown-num, .file-inf { opacity: 1; }
       .countdown-num { display: none; }
+      .control, .audio-dock { pointer-events: auto; }
     }
   </style>
 </head>
 <body>
   <div class="stage" id="root">
     <div class="brand" id="brand">
-      <img src="extension/assets/exergy_connect_logo.png" alt="Exergy Connect" width="42" height="42" />
-      <h1>Exergy Frame</h1>
+      <img src="extension/assets/exergy_connect_logo.png" alt="Exergy ∞ Connect" width="42" height="42" />
+      <h1>Exergy ∞ xFrame</h1>
     </div>
     <p class="phase" id="phaseTitle"></p>
     <div class="glass" aria-hidden="true"></div>
     <svg class="frame" id="svg" viewBox="0 0 760 520" preserveAspectRatio="xMidYMid meet" aria-hidden="true"></svg>
-    <button class="control" id="replay" type="button">replay</button>
+    <div class="controls">
+      <button class="control" id="replay" type="button">replay</button>
+    </div>
   </div>
 
   <script>
@@ -289,6 +321,7 @@
     const phaseTitle = document.getElementById("phaseTitle");
     const brand = document.getElementById("brand");
     const replayBtn = document.getElementById("replay");
+    const audioWrap = document.getElementById("audioWrap");
     const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
     const registry = {
@@ -631,7 +664,8 @@
         });
         Object.values(registry.fills).forEach((el) => el.classList.add("visible"));
         brand.classList.add("visible");
-        phaseTitle.textContent = "Capture context, not just content.";
+        audioWrap.classList.add("revealed");
+        phaseTitle.textContent = "Intent captured.";
         phaseTitle.classList.add("visible");
         replayBtn.classList.add("revealed");
         return;
@@ -639,6 +673,7 @@
 
       await wait(180);
       brand.classList.add("visible");
+      audioWrap.classList.add("revealed");
       await wait(400);
 
       await setTitle("Your tab is the stage…");
@@ -695,7 +730,7 @@
       showLabel("tagSave");
       await wait(700);
 
-      await setTitle("Capture context, not just content.");
+      await setTitle("Intent captured.");
       replayBtn.classList.add("revealed");
     }
 

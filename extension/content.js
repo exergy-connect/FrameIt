@@ -10,6 +10,8 @@
   let totalPausedMs = 0;
   let pausedAt = 0;
   let isPaused = false;
+  let pointerEl = null;
+  let onPointerMove = null;
 
   const ICON_PAUSE = `
     <svg class="frameit-icon" viewBox="0 0 24 24" aria-hidden="true">
@@ -44,7 +46,11 @@
 
     if (message.type === "frameit-show-session-bar") {
       recordingStartedAt = message.startedAt || Date.now();
-      showSessionBar({ includeLogo: message.includeLogo !== false });
+      showSessionBar({
+        includeLogo: message.includeLogo !== false,
+        hideControls: message.hideControls !== false,
+        includePointer: Boolean(message.includePointer),
+      });
       sendResponse({ ok: true });
       return false;
     }
@@ -131,9 +137,14 @@
     });
   }
 
-  function showSessionBar({ includeLogo = true } = {}) {
+  function showSessionBar({
+    includeLogo = true,
+    hideControls = true,
+    includePointer = false,
+  } = {}) {
     const root = ensureRoot();
     clearRoot();
+    stopPointer();
     clearTimer();
     totalPausedMs = 0;
     pausedAt = 0;
@@ -148,6 +159,16 @@
       watermark.width = 48;
       watermark.height = 48;
       root.appendChild(watermark);
+    }
+
+    if (includePointer) {
+      startPointer(root);
+    }
+
+    // When controls are hidden from the video, omit the on-page session bar.
+    // The extension popup provides pause / stop instead.
+    if (hideControls) {
+      return;
     }
 
     const bar = document.createElement("div");
@@ -251,6 +272,42 @@
     });
   }
 
+  function startPointer(root) {
+    stopPointer();
+    pointerEl = document.createElement("div");
+    pointerEl.className = "frameit-pointer";
+    pointerEl.setAttribute("aria-hidden", "true");
+    pointerEl.innerHTML = `
+      <svg viewBox="0 0 24 24" width="24" height="24">
+        <path
+          d="M4 3l12.5 9.2-5.3 1.2 3.4 7.4-2.6 1.2-3.5-7.5L4 17.8V3z"
+          fill="#e8eef5"
+          stroke="#0f1419"
+          stroke-width="1.2"
+          stroke-linejoin="round"
+        />
+      </svg>
+    `;
+    root.appendChild(pointerEl);
+
+    onPointerMove = (event) => {
+      pointerEl.style.transform = `translate(${event.clientX}px, ${event.clientY}px)`;
+      pointerEl.classList.add("is-visible");
+    };
+    window.addEventListener("mousemove", onPointerMove, { passive: true });
+  }
+
+  function stopPointer() {
+    if (onPointerMove) {
+      window.removeEventListener("mousemove", onPointerMove);
+      onPointerMove = null;
+    }
+    if (pointerEl) {
+      pointerEl.remove();
+      pointerEl = null;
+    }
+  }
+
   function getElapsedMs() {
     const pausedExtra = isPaused && pausedAt ? Date.now() - pausedAt : 0;
     return Math.max(
@@ -261,6 +318,7 @@
 
   function teardown() {
     clearTimer();
+    stopPointer();
     const root = document.getElementById(ROOT_ID);
     if (root) {
       root.remove();
