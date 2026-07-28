@@ -1,5 +1,8 @@
+importScripts("recordingStore.js");
+
 const OFFSCREEN_PATH = "offscreen.html";
 const OFFSCREEN_URL = chrome.runtime.getURL(OFFSCREEN_PATH);
+const EXTENSION_ORIGIN = chrome.runtime.getURL("/");
 
 const CONTENT_SESSION_TYPES = new Set([
   "frameit-countdown-done",
@@ -15,10 +18,18 @@ const EXTENSION_PAGE_TYPES = new Set([
 
 let session = null;
 
+function isExtensionPageSender(sender) {
+  return typeof sender?.url === "string" && sender.url.startsWith(EXTENSION_ORIGIN);
+}
+
+function isTabContentScript(sender) {
+  return Boolean(sender?.tab) && !isExtensionPageSender(sender);
+}
+
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (!message || !message.type) return;
 
-  const fromContentScript = Boolean(sender.tab);
+  const fromContentScript = isTabContentScript(sender);
 
   // Content scripts may only drive overlay/session UI events.
   if (fromContentScript && !CONTENT_SESSION_TYPES.has(message.type)) {
@@ -26,8 +37,12 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   }
 
   // Popup / extension-page commands should not come from a tab content script.
-  if (!fromContentScript && !EXTENSION_PAGE_TYPES.has(message.type) && !CONTENT_SESSION_TYPES.has(message.type)) {
-    // Ignore offscreen-only traffic (acquire/start/stop/ping/etc.).
+  if (
+    !fromContentScript &&
+    !EXTENSION_PAGE_TYPES.has(message.type) &&
+    !CONTENT_SESSION_TYPES.has(message.type)
+  ) {
+    // Ignore offscreen/saver-only traffic here (handled by dedicated listeners).
     return false;
   }
 
@@ -229,6 +244,8 @@ async function stopSession() {
         finalMime.includes("mp4") ? ".mp4" : ".webm"
       );
 
+    await downloadPendingRecording(finalName);
+
     try {
       await chrome.tabs.sendMessage(tabId, { type: "frameit-teardown" });
     } catch (_error) {
@@ -245,6 +262,49 @@ async function stopSession() {
   }
 }
 
+async function downloadPendingRecording(filename) {
+  const saverUrl = `${chrome.runtime.getURL("saver.html")}?filename=${encodeURIComponent(
+    filename
+  )}`;
+
+  return new Promise((resolve, reject) => {
+    let saverTabId = null;
+    const timeoutId = setTimeout(() => {
+      finish(new Error("Timed out while saving the recording"), true);
+    }, 120_000);
+
+    function finish(error, removeTab) {
+      clearTimeout(timeoutId);
+      chrome.runtime.onMessage.removeListener(onMessage);
+      if (removeTab && saverTabId != null) {
+        chrome.tabs.remove(saverTabId).catch(() => {});
+      }
+      if (error) reject(error);
+      else resolve();
+    }
+
+    function onMessage(message, sender) {
+      if (message?.type !== "frameit-save-done") return;
+      if (!isExtensionPageSender(sender)) return;
+      if (message.ok) {
+        finish(null, false);
+      } else {
+        finish(new Error(message.error || "Failed to save recording"), true);
+      }
+    }
+
+    chrome.runtime.onMessage.addListener(onMessage);
+
+    chrome.tabs
+      .create({ url: saverUrl, active: false })
+      .then((tab) => {
+        saverTabId = tab.id;
+      })
+      .catch((error) => {
+        finish(error, false);
+      });
+  });
+}
 async function abortSession() {
   const tabId = session?.tabId;
   session = null;
@@ -253,6 +313,12 @@ async function abortSession() {
     await sendToOffscreen({ type: "frameit-discard" });
   } catch (_error) {
     // Offscreen may not exist.
+  }
+
+  try {
+    await clearPendingRecording();
+  } catch (_error) {
+    // ignore
   }
 
   if (tabId != null) {

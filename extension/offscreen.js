@@ -21,7 +21,6 @@ let audioContext = null;
 let mediaRecorder = null;
 let recordedChunks = [];
 let activeMimeType = "";
-let pendingObjectUrl = null;
 
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (!message || !message.type) return;
@@ -85,8 +84,12 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
   if (message.type === "frameit-discard") {
     cleanup();
-    sendResponse({ ok: true });
-    return false;
+    clearPendingRecording()
+      .then(() => sendResponse({ ok: true }))
+      .catch((error) =>
+        sendResponse({ ok: false, error: String(error?.message || error) })
+      );
+    return true;
   }
 
   return false;
@@ -229,9 +232,6 @@ async function stopRecording(filename) {
   if (!filename || typeof filename !== "string") {
     throw new Error("Missing download filename");
   }
-  if (!chrome.downloads?.download) {
-    throw new Error("chrome.downloads is unavailable in the offscreen recorder");
-  }
 
   const mimeType = activeMimeType || mediaRecorder.mimeType || "video/webm";
 
@@ -257,80 +257,19 @@ async function stopRecording(filename) {
     throw new Error("Recording produced an empty file");
   }
 
-  revokePendingObjectUrl();
-  const objectUrl = URL.createObjectURL(blob);
-  pendingObjectUrl = objectUrl;
+  // Offscreen cannot use chrome.downloads; hand the blob to the SW via IndexedDB.
+  await putPendingRecording(blob);
+  cleanup();
 
-  try {
-    const downloadId = await chrome.downloads.download({
-      url: objectUrl,
-      filename,
-      saveAs: false,
-    });
-
-    await waitForDownloadSettled(downloadId);
-    revokePendingObjectUrl();
-    cleanupTracksOnly();
-
-    return {
-      mimeType,
-      size: blob.size,
-      filename,
-      downloadId,
-      extension: mimeType.includes("mp4") ? ".mp4" : ".webm",
-    };
-  } catch (error) {
-    revokePendingObjectUrl();
-    cleanup();
-    throw error;
-  }
+  return {
+    mimeType,
+    size: blob.size,
+    filename,
+    extension: mimeType.includes("mp4") ? ".mp4" : ".webm",
+  };
 }
 
-function waitForDownloadSettled(downloadId) {
-  return new Promise((resolve, reject) => {
-    const timeoutId = setTimeout(() => {
-      chrome.downloads.onChanged.removeListener(onChanged);
-      // Download may still finish from disk cache; revoke on the timeout path too.
-      resolve();
-    }, 120_000);
-
-    function finish() {
-      clearTimeout(timeoutId);
-      chrome.downloads.onChanged.removeListener(onChanged);
-      resolve();
-    }
-
-    function onChanged(delta) {
-      if (delta.id !== downloadId || !delta.state) return;
-      if (delta.state.current === "complete") {
-        finish();
-        return;
-      }
-      if (delta.state.current === "interrupted") {
-        clearTimeout(timeoutId);
-        chrome.downloads.onChanged.removeListener(onChanged);
-        reject(new Error("Download was interrupted before it completed"));
-      }
-    }
-
-    chrome.downloads.onChanged.addListener(onChanged);
-
-    // Handle the race where the download finished before the listener attached.
-    chrome.downloads.search({ id: downloadId }).then((results) => {
-      const item = results && results[0];
-      if (!item) return;
-      if (item.state === "complete") {
-        finish();
-      } else if (item.state === "interrupted") {
-        clearTimeout(timeoutId);
-        chrome.downloads.onChanged.removeListener(onChanged);
-        reject(new Error("Download was interrupted before it completed"));
-      }
-    });
-  });
-}
-
-function cleanupTracksOnly() {
+function cleanup() {
   if (mediaRecorder && mediaRecorder.state !== "inactive") {
     try {
       mediaRecorder.stop();
@@ -353,16 +292,4 @@ function cleanupTracksOnly() {
     audioContext.close().catch(() => {});
     audioContext = null;
   }
-}
-
-function revokePendingObjectUrl() {
-  if (pendingObjectUrl) {
-    URL.revokeObjectURL(pendingObjectUrl);
-    pendingObjectUrl = null;
-  }
-}
-
-function cleanup() {
-  revokePendingObjectUrl();
-  cleanupTracksOnly();
 }
