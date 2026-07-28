@@ -13,7 +13,7 @@ permissions:
 
 jobs:
   package:
-    name: Build Chrome Web Store zip
+    name: Build Chrome Web Store zip for plugin
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -27,7 +27,7 @@ jobs:
         run: |
           set -euo pipefail
           VERSION="$(node -p "require('./extension/manifest.json').version")"
-          ASSET_NAME="exergy∞xframe-${VERSION}.zip"
+          ASSET_NAME="exergy∞xframe-chrome-plugin-${VERSION}.zip"
           mkdir -p dist
 
           # Chrome Web Store expects manifest.json at the zip root.
