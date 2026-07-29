@@ -8,6 +8,7 @@ const MIME_CANDIDATES = [
 
 const OFFSCREEN_ONLY_TYPES = new Set([
   "frameit-offscreen-ping",
+  "frameit-recorder-status",
   "frameit-acquire-stream",
   "frameit-start-recording",
   "frameit-pause-recording",
@@ -32,6 +33,11 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
   if (message.type === "frameit-offscreen-ping") {
     sendResponse({ ok: true, source: "offscreen" });
+    return false;
+  }
+
+  if (message.type === "frameit-recorder-status") {
+    sendResponse({ ok: true, ...getRecorderStatus() });
     return false;
   }
 
@@ -96,6 +102,20 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
   return false;
 });
+
+function getRecorderStatus() {
+  const recorderState = mediaRecorder?.state || "inactive";
+  const hasStream = Boolean(
+    captureStream && captureStream.getTracks().some((track) => track.readyState === "live")
+  );
+  return {
+    source: "offscreen",
+    hasStream,
+    recording: recorderState === "recording" || recorderState === "paused",
+    paused: recorderState === "paused",
+    mimeType: activeMimeType || mediaRecorder?.mimeType || "",
+  };
+}
 
 async function acquireStream(streamId, { includePointer = false } = {}) {
   cleanup();

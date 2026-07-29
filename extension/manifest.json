@@ -32,6 +32,7 @@
   "web_accessible_resources": [
     {
       "resources": [
+        "content.css",
         "assets/favicon.svg",
         "assets/favicon.ico",
         "assets/exergy_connect_logo.png"

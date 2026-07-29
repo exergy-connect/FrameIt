@@ -3,6 +3,7 @@ importScripts("recordingStore.js");
 const OFFSCREEN_PATH = "offscreen.html";
 const OFFSCREEN_URL = chrome.runtime.getURL(OFFSCREEN_PATH);
 const EXTENSION_ORIGIN = chrome.runtime.getURL("/");
+const SESSION_STORAGE_KEY = "frameitSession";
 
 const CONTENT_SESSION_TYPES = new Set([
   "frameit-countdown-done",
@@ -17,6 +18,7 @@ const EXTENSION_PAGE_TYPES = new Set([
 ]);
 
 let session = null;
+let sessionRestorePromise = null;
 
 function isExtensionPageSender(sender) {
   return typeof sender?.url === "string" && sender.url.startsWith(EXTENSION_ORIGIN);
@@ -105,20 +107,28 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       sendResponse({ ok: false, error: "Status is only available to the extension UI" });
       return false;
     }
-    sendResponse({
-      ok: true,
-      active: Boolean(session),
-      phase: session?.phase || null,
-      paused: Boolean(session?.paused),
-      recordingStartedAt: session?.recordingStartedAt || null,
-      pausedAt: session?.pausedAt || null,
-      totalPausedMs: session?.totalPausedMs || 0,
-      hideControls: session?.hideControls !== false,
-    });
-    return false;
+    getStatus()
+      .then((status) => sendResponse(status))
+      .catch((error) =>
+        sendResponse({ ok: false, error: String(error?.message || error) })
+      );
+    return true;
   }
 
   return false;
+});
+
+chrome.tabs.onRemoved.addListener((tabId) => {
+  if (session?.tabId === tabId) {
+    abortSession().catch(() => {});
+  }
+});
+
+chrome.tabs.onUpdated.addListener((tabId, changeInfo) => {
+  if (!session || session.tabId !== tabId) return;
+  if (changeInfo.status === "complete" && session.phase === "recording") {
+    ensureSessionOverlay().catch(() => {});
+  }
 });
 
 async function startSession({
@@ -127,6 +137,7 @@ async function startSession({
   hideControls = true,
   includePointer = false,
 } = {}) {
+  await ensureSessionRestored();
   if (session) {
     throw new Error("A session is already in progress");
   }
@@ -161,6 +172,7 @@ async function startSession({
     pausedAt: 0,
     totalPausedMs: 0,
   };
+  await persistSession();
 
   try {
     const streamId = await chrome.tabCapture.getMediaStreamId({
@@ -179,6 +191,7 @@ async function startSession({
 
     await injectOverlay(tab.id);
     session.phase = "countdown";
+    await persistSession();
     await chrome.tabs.sendMessage(tab.id, { type: "frameit-show-countdown" });
   } catch (error) {
     await abortSession();
@@ -187,6 +200,7 @@ async function startSession({
 }
 
 async function onCountdownDone() {
+  await ensureSessionRestored();
   if (!session || session.phase !== "countdown") {
     return;
   }
@@ -203,18 +217,13 @@ async function onCountdownDone() {
   session.pausedAt = 0;
   session.totalPausedMs = 0;
   session.recordingStartedAt = Date.now();
+  await persistSession();
 
-  await chrome.tabs.sendMessage(session.tabId, {
-    type: "frameit-show-session-bar",
-    startedAt: session.recordingStartedAt,
-    includeLogo: session.includeLogo !== false,
-    logoDataUrl: session.logoDataUrl || null,
-    hideControls: session.hideControls !== false,
-    includePointer: Boolean(session.includePointer),
-  });
+  await ensureSessionOverlay();
 }
 
 async function pauseSession() {
+  await ensureSessionRestored();
   if (!session || session.phase !== "recording" || session.paused) {
     throw new Error("Session is not recording");
   }
@@ -226,9 +235,11 @@ async function pauseSession() {
 
   session.paused = true;
   session.pausedAt = Date.now();
+  await persistSession();
 }
 
 async function resumeSession() {
+  await ensureSessionRestored();
   if (!session || session.phase !== "recording" || !session.paused) {
     throw new Error("Session is not paused");
   }
@@ -244,9 +255,11 @@ async function resumeSession() {
   }
   session.pausedAt = 0;
   session.paused = false;
+  await persistSession();
 }
 
 async function stopSession() {
+  await ensureSessionRestored();
   if (!session) {
     throw new Error("No active session");
   }
@@ -256,6 +269,7 @@ async function stopSession() {
   const filename = buildFilename(tabTitle, sessionStartedAt, extension);
 
   session.phase = "stopping";
+  await persistSession();
 
   try {
     const stopped = await sendToOffscreen({
@@ -284,6 +298,7 @@ async function stopSession() {
     }
 
     session = null;
+    await persistSession();
     await closeOffscreenDocument();
 
     return { filename: finalName, mimeType: finalMime };
@@ -291,6 +306,23 @@ async function stopSession() {
     await abortSession();
     throw error;
   }
+}
+
+async function getStatus() {
+  await ensureSessionRestored();
+  if (session?.phase === "recording") {
+    await ensureSessionOverlay().catch(() => {});
+  }
+  return {
+    ok: true,
+    active: Boolean(session),
+    phase: session?.phase || null,
+    paused: Boolean(session?.paused),
+    recordingStartedAt: session?.recordingStartedAt || null,
+    pausedAt: session?.pausedAt || null,
+    totalPausedMs: session?.totalPausedMs || 0,
+    hideControls: session?.hideControls !== false,
+  };
 }
 
 async function downloadPendingRecording(filename) {
@@ -336,9 +368,11 @@ async function downloadPendingRecording(filename) {
       });
   });
 }
+
 async function abortSession() {
   const tabId = session?.tabId;
   session = null;
+  await persistSession();
 
   try {
     await sendToOffscreen({ type: "frameit-discard" });
@@ -364,14 +398,139 @@ async function abortSession() {
 }
 
 async function injectOverlay(tabId) {
-  await chrome.scripting.insertCSS({
-    target: { tabId },
-    files: ["content.css"],
-  });
   await chrome.scripting.executeScript({
     target: { tabId },
     files: ["content.js"],
   });
+}
+
+async function ensureSessionOverlay() {
+  if (!session || session.tabId == null) return;
+  if (session.phase !== "recording" && session.phase !== "countdown") return;
+
+  try {
+    await injectOverlay(session.tabId);
+  } catch (_error) {
+    // Tab may disallow scripting momentarily.
+    return;
+  }
+
+  if (session.phase === "countdown") {
+    try {
+      await chrome.tabs.sendMessage(session.tabId, {
+        type: "frameit-show-countdown",
+      });
+    } catch (_error) {
+      // ignore
+    }
+    return;
+  }
+
+  try {
+    await chrome.tabs.sendMessage(session.tabId, {
+      type: "frameit-show-session-bar",
+      startedAt: session.recordingStartedAt,
+      includeLogo: session.includeLogo !== false,
+      logoDataUrl: session.logoDataUrl || null,
+      hideControls: session.hideControls !== false,
+      includePointer: Boolean(session.includePointer),
+      paused: Boolean(session.paused),
+      pausedAt: session.pausedAt || 0,
+      totalPausedMs: session.totalPausedMs || 0,
+    });
+  } catch (_error) {
+    // Overlay may be unavailable on restricted pages.
+  }
+}
+
+function serializeSession(value) {
+  if (!value) return null;
+  return {
+    ...value,
+    sessionStartedAt:
+      value.sessionStartedAt instanceof Date
+        ? value.sessionStartedAt.toISOString()
+        : value.sessionStartedAt,
+  };
+}
+
+function deserializeSession(value) {
+  if (!value || typeof value !== "object") return null;
+  return {
+    ...value,
+    sessionStartedAt: value.sessionStartedAt
+      ? new Date(value.sessionStartedAt)
+      : new Date(),
+  };
+}
+
+async function persistSession() {
+  if (session) {
+    await chrome.storage.session.set({
+      [SESSION_STORAGE_KEY]: serializeSession(session),
+    });
+  } else {
+    await chrome.storage.session.remove(SESSION_STORAGE_KEY);
+  }
+}
+
+async function ensureSessionRestored() {
+  if (session) return session;
+  if (!sessionRestorePromise) {
+    sessionRestorePromise = restoreSession().finally(() => {
+      sessionRestorePromise = null;
+    });
+  }
+  return sessionRestorePromise;
+}
+
+async function restoreSession() {
+  if (session) return session;
+
+  let stored = null;
+  try {
+    const result = await chrome.storage.session.get(SESSION_STORAGE_KEY);
+    stored = deserializeSession(result?.[SESSION_STORAGE_KEY]);
+  } catch (_error) {
+    stored = null;
+  }
+
+  if (!stored) {
+    return null;
+  }
+
+  let recorder = null;
+  try {
+    if (await hasOffscreenDocument()) {
+      recorder = await sendToOffscreen({ type: "frameit-recorder-status" });
+    }
+  } catch (_error) {
+    recorder = null;
+  }
+
+  // Only an actively encoding recorder is safely recoverable after SW restart.
+  // Holding a stream during countdown/acquire without MediaRecorder is discarded.
+  if (!recorder?.ok || !recorder.recording) {
+    await chrome.storage.session.remove(SESSION_STORAGE_KEY);
+    try {
+      await sendToOffscreen({ type: "frameit-discard" });
+    } catch (_error) {
+      // Offscreen may already be gone.
+    }
+    await closeOffscreenDocument();
+    return null;
+  }
+
+  session = {
+    ...stored,
+    mimeType: stored.mimeType || recorder.mimeType || "",
+    paused: Boolean(recorder.paused),
+    phase: "recording",
+    recordingStartedAt: stored.recordingStartedAt || Date.now(),
+  };
+
+  await persistSession();
+  return session;
 }
 
 async function ensureOffscreenDocument() {
@@ -479,3 +638,6 @@ function formatSessionStamp(date) {
   const minutes = String(d.getMinutes()).padStart(2, "0");
   return `${year}-${month}-${day} ${hours}_${minutes}`;
 }
+
+// Recover an in-flight session if the service worker was restarted mid-capture.
+ensureSessionRestored().catch(() => {});

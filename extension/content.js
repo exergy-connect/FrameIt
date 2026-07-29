@@ -5,6 +5,11 @@
   window.__frameItOverlayLoaded = true;
 
   const ROOT_ID = "frameit-root";
+  const CURSOR_STYLE_ID = "frameit-cursor-style";
+
+  let hostEl = null;
+  let shadowRoot = null;
+  let cssTextPromise = null;
   let timerId = null;
   let recordingStartedAt = 0;
   let totalPausedMs = 0;
@@ -15,7 +20,10 @@
   let onSessionKeyDown = null;
   let sessionBusy = false;
   let sessionUi = null; // { bar, pauseBtn, stopBtn, updateTime } when on-page bar exists
-  const CURSOR_STYLE_ID = "frameit-cursor-style";
+  let sessionActive = false;
+  let sessionOptions = null;
+  let guardTimerId = null;
+  let remountScheduled = false;
 
   const ICON_PAUSE = `
     <svg class="frameit-icon" viewBox="0 0 24 24" aria-hidden="true">
@@ -50,13 +58,28 @@
 
     if (message.type === "frameit-show-session-bar") {
       recordingStartedAt = message.startedAt || Date.now();
+      totalPausedMs = Number(message.totalPausedMs) || 0;
+      pausedAt = Number(message.pausedAt) || 0;
+      isPaused = Boolean(message.paused);
       showSessionBar({
         includeLogo: message.includeLogo !== false,
         logoDataUrl: normalizeLogoDataUrl(message.logoDataUrl),
         hideControls: message.hideControls !== false,
         includePointer: Boolean(message.includePointer),
+      })
+        .then(() => sendResponse({ ok: true }))
+        .catch((error) =>
+          sendResponse({ ok: false, error: String(error?.message || error) })
+        );
+      return true;
+    }
+
+    if (message.type === "frameit-ping-overlay") {
+      sendResponse({
+        ok: true,
+        active: sessionActive,
+        connected: Boolean(hostEl?.isConnected),
       });
-      sendResponse({ ok: true });
       return false;
     }
 
@@ -70,52 +93,161 @@
     return false;
   });
 
-  function ensureRoot() {
-    let root = document.getElementById(ROOT_ID);
-    if (!root) {
-      root = document.createElement("div");
-      root.id = ROOT_ID;
-      root.setAttribute("data-frameit", "true");
-      document.documentElement.appendChild(root);
+  document.addEventListener("fullscreenchange", () => {
+    if (!sessionActive || !hostEl) return;
+    placeHost(hostEl);
+  });
+
+  function loadCssText() {
+    if (!cssTextPromise) {
+      cssTextPromise = fetch(chrome.runtime.getURL("content.css"))
+        .then((response) => {
+          if (!response.ok) {
+            throw new Error(`Failed to load overlay CSS (${response.status})`);
+          }
+          return response.text();
+        })
+        .catch((error) => {
+          cssTextPromise = null;
+          throw error;
+        });
     }
-    return root;
+    return cssTextPromise;
   }
 
-  function clearRoot() {
-    const root = document.getElementById(ROOT_ID);
-    if (root) {
-      root.replaceChildren();
+  async function ensureRoot() {
+    if (hostEl?.isConnected && shadowRoot) {
+      placeHost(hostEl);
+      return shadowRoot;
+    }
+
+    const cssText = await loadCssText();
+
+    if (hostEl && !hostEl.isConnected) {
+      hostEl.remove();
+      hostEl = null;
+      shadowRoot = null;
+    }
+
+    if (!hostEl) {
+      hostEl = document.createElement("div");
+      hostEl.id = ROOT_ID;
+      hostEl.setAttribute("data-frameit", "true");
+      // Closed shadow isolates controls from aggressive host-page CSS.
+      shadowRoot = hostEl.attachShadow({ mode: "closed" });
+      const style = document.createElement("style");
+      style.textContent = cssText;
+      shadowRoot.appendChild(style);
+    }
+
+    placeHost(hostEl);
+    startDomGuard();
+    return shadowRoot;
+  }
+
+  function canContainOverlay(el) {
+    if (!el || el === hostEl) return false;
+    if (el === document.documentElement || el === document.body) return true;
+    if (el.nodeType !== 1) return false;
+    const tag = el.tagName;
+    // Replaced/media elements cannot host child overlay nodes.
+    return !(
+      tag === "VIDEO" ||
+      tag === "AUDIO" ||
+      tag === "IMG" ||
+      tag === "CANVAS" ||
+      tag === "IFRAME" ||
+      tag === "EMBED" ||
+      tag === "OBJECT"
+    );
+  }
+
+  function placeHost(host) {
+    const fullscreenEl = document.fullscreenElement;
+    const parent =
+      fullscreenEl && canContainOverlay(fullscreenEl)
+        ? fullscreenEl
+        : document.documentElement;
+    if (host.parentElement !== parent) {
+      parent.appendChild(host);
     }
   }
 
-  function showCountdown() {
+  function clearShadowContent() {
+    if (!shadowRoot) return;
+    for (const node of [...shadowRoot.childNodes]) {
+      if (node.nodeName === "STYLE") continue;
+      node.remove();
+    }
+  }
+
+  function startDomGuard() {
+    if (guardTimerId != null) return;
+    // Poll lightly: busy SPAs mutate constantly, and fullscreen/top-layer
+    // changes can detach the host without a reliable single mutation target.
+    guardTimerId = window.setInterval(() => {
+      if (!sessionActive) return;
+      if (hostEl?.isConnected) {
+        placeHost(hostEl);
+        return;
+      }
+      scheduleRemount();
+    }, 1000);
+  }
+
+  function stopDomGuard() {
+    if (guardTimerId != null) {
+      window.clearInterval(guardTimerId);
+      guardTimerId = null;
+    }
+  }
+
+  function scheduleRemount() {
+    if (!sessionActive || remountScheduled) return;
+    remountScheduled = true;
+    queueMicrotask(async () => {
+      remountScheduled = false;
+      if (!sessionActive || hostEl?.isConnected) return;
+      try {
+        await showSessionBar(sessionOptions || {});
+      } catch (_error) {
+        // Page may be unloading.
+      }
+    });
+  }
+
+  async function showCountdown() {
+    sessionActive = true;
+    const root = await ensureRoot();
+    clearShadowContent();
+    clearTimer();
+    stopPointer();
+    unbindSessionKeys();
+    sessionUi = null;
+
+    const logoUrl = chrome.runtime.getURL("assets/exergy_connect_logo.png");
+    const overlay = document.createElement("div");
+    overlay.className = "frameit-countdown";
+    overlay.innerHTML = `
+      <div class="frameit-countdown__card">
+        <img
+          class="frameit-countdown__logo"
+          src="${logoUrl}"
+          alt="Exergy Connect"
+          width="56"
+          height="56"
+        />
+        <div class="frameit-countdown__brand">Exergy ∞ xFrame</div>
+        <div class="frameit-countdown__number" aria-live="polite">3</div>
+        <div class="frameit-countdown__label">Starting capture...</div>
+      </div>
+    `;
+    root.appendChild(overlay);
+
+    const numberEl = overlay.querySelector(".frameit-countdown__number");
+    let count = 3;
+
     return new Promise((resolve) => {
-      const root = ensureRoot();
-      clearRoot();
-      clearTimer();
-
-      const logoUrl = chrome.runtime.getURL("assets/exergy_connect_logo.png");
-      const overlay = document.createElement("div");
-      overlay.className = "frameit-countdown";
-      overlay.innerHTML = `
-        <div class="frameit-countdown__card">
-          <img
-            class="frameit-countdown__logo"
-            src="${logoUrl}"
-            alt="Exergy Connect"
-            width="56"
-            height="56"
-          />
-          <div class="frameit-countdown__brand">Exergy ∞ xFrame</div>
-          <div class="frameit-countdown__number" aria-live="polite">3</div>
-          <div class="frameit-countdown__label">Starting capture...</div>
-        </div>
-      `;
-      root.appendChild(overlay);
-
-      const numberEl = overlay.querySelector(".frameit-countdown__number");
-      let count = 3;
-
       const tick = () => {
         if (count > 1) {
           count -= 1;
@@ -142,20 +274,25 @@
     });
   }
 
-  function showSessionBar({
+  async function showSessionBar({
     includeLogo = true,
     logoDataUrl = null,
     hideControls = true,
     includePointer = false,
   } = {}) {
-    const root = ensureRoot();
-    clearRoot();
+    sessionOptions = {
+      includeLogo,
+      logoDataUrl,
+      hideControls,
+      includePointer,
+    };
+    sessionActive = true;
+
+    const root = await ensureRoot();
+    clearShadowContent();
     stopPointer();
     unbindSessionKeys();
     clearTimer();
-    totalPausedMs = 0;
-    pausedAt = 0;
-    isPaused = false;
     sessionBusy = false;
     sessionUi = null;
 
@@ -189,6 +326,9 @@
 
     const bar = document.createElement("div");
     bar.className = "frameit-session-bar";
+    if (isPaused) {
+      bar.classList.add("frameit-session-bar--paused");
+    }
     bar.innerHTML = `
       <div class="frameit-session-bar__left">
         <span class="frameit-session-bar__dot" aria-hidden="true"></span>
@@ -199,9 +339,9 @@
         <button
           type="button"
           class="frameit-btn frameit-btn--pause"
-          title="Pause (P)"
-          aria-label="Pause"
-        >${ICON_PAUSE}</button>
+          title="${isPaused ? "Continue (P)" : "Pause (P)"}"
+          aria-label="${isPaused ? "Continue" : "Pause"}"
+        >${isPaused ? ICON_CONTINUE : ICON_PAUSE}</button>
         <button
           type="button"
           class="frameit-btn frameit-btn--stop"
@@ -304,6 +444,9 @@
           pauseBtn.setAttribute("aria-label", "Continue");
         }
       }
+      if (sessionOptions) {
+        sessionOptions = { ...sessionOptions };
+      }
       if (updateTime) updateTime();
     } catch (error) {
       window.alert(String(error?.message || error));
@@ -403,15 +546,20 @@
   }
 
   function teardown() {
+    sessionActive = false;
+    sessionOptions = null;
+    remountScheduled = false;
     clearTimer();
     stopPointer();
     unbindSessionKeys();
     hideNativeCursor(false);
+    stopDomGuard();
     sessionUi = null;
     sessionBusy = false;
-    const root = document.getElementById(ROOT_ID);
-    if (root) {
-      root.remove();
+    if (hostEl) {
+      hostEl.remove();
+      hostEl = null;
+      shadowRoot = null;
     }
   }
 
