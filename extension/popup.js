@@ -1,8 +1,11 @@
 const DEFAULT_LOGO_URL = "assets/exergy_connect_logo.png";
 const LOGO_STORAGE_KEY = "customLogoDataUrl";
+const SNAPSHOT_MODE_KEY = "snapshotMode";
+const SNAPSHOT_DELAY_KEY = "snapshotDelay";
 const MAX_LOGO_BYTES = 500_000;
 
 const startBtn = document.getElementById("start");
+const snapshotBtn = document.getElementById("snapshot");
 const pauseBtn = document.getElementById("pause");
 const stopBtn = document.getElementById("stop");
 const statusEl = document.getElementById("status");
@@ -16,12 +19,16 @@ const hideControlsEl = document.getElementById("hideControls");
 const includePointerEl = document.getElementById("includePointer");
 const activeSessionEl = document.getElementById("activeSession");
 const activeTimeEl = document.getElementById("activeTime");
+const snapshotModeFullEl = document.getElementById("snapshotModeFull");
+const snapshotModeRegionEl = document.getElementById("snapshotModeRegion");
+const snapshotDelayEl = document.getElementById("snapshotDelay");
 
 let timerId = null;
 let statusSnapshot = null;
 let customLogoDataUrl = null;
 
 initLogoSettings();
+initSnapshotSettings();
 refreshStatus();
 
 includeLogoEl.addEventListener("change", syncLogoOptionsVisibility);
@@ -62,8 +69,13 @@ logoFileEl.addEventListener("change", async () => {
   }
 });
 
+snapshotModeFullEl.addEventListener("change", persistSnapshotSettings);
+snapshotModeRegionEl.addEventListener("change", persistSnapshotSettings);
+snapshotDelayEl.addEventListener("change", persistSnapshotSettings);
+
 startBtn.addEventListener("click", async () => {
   startBtn.disabled = true;
+  snapshotBtn.disabled = true;
   setStatus("Starting session…");
 
   try {
@@ -82,6 +94,42 @@ startBtn.addEventListener("click", async () => {
   } catch (error) {
     setStatus(String(error?.message || error), true);
     startBtn.disabled = false;
+    snapshotBtn.disabled = false;
+  }
+});
+
+snapshotBtn.addEventListener("click", async () => {
+  snapshotBtn.disabled = true;
+  startBtn.disabled = true;
+  setSnapshotControlsDisabled(true);
+  setStatus("Starting snapshot…");
+
+  const mode = snapshotModeRegionEl.checked ? "region" : "full";
+  const delay = Number(snapshotDelayEl.value) || 0;
+
+  try {
+    await persistSnapshotSettings();
+    const result = await chrome.runtime.sendMessage({
+      type: "frameit-start-snapshot",
+      mode,
+      delay,
+    });
+    if (!result?.ok) {
+      throw new Error(result?.error || "Could not take snapshot");
+    }
+    setStatus(
+      delay > 0
+        ? "Countdown running on the tab."
+        : mode === "region"
+          ? "Select a region on the tab."
+          : "Capturing snapshot…"
+    );
+    window.close();
+  } catch (error) {
+    setStatus(String(error?.message || error), true);
+    snapshotBtn.disabled = false;
+    startBtn.disabled = false;
+    setSnapshotControlsDisabled(false);
   }
 });
 
@@ -142,6 +190,35 @@ async function initLogoSettings() {
   syncLogoOptionsVisibility();
 }
 
+async function initSnapshotSettings() {
+  try {
+    const stored = await chrome.storage.local.get([
+      SNAPSHOT_MODE_KEY,
+      SNAPSHOT_DELAY_KEY,
+    ]);
+    const mode = stored?.[SNAPSHOT_MODE_KEY] === "region" ? "region" : "full";
+    snapshotModeFullEl.checked = mode === "full";
+    snapshotModeRegionEl.checked = mode === "region";
+
+    const delay = Number(stored?.[SNAPSHOT_DELAY_KEY]);
+    const allowed = new Set(["0", "3", "5", "10"]);
+    const delayValue = allowed.has(String(delay)) ? String(delay) : "5";
+    snapshotDelayEl.value = delayValue;
+  } catch (_error) {
+    snapshotModeFullEl.checked = true;
+    snapshotDelayEl.value = "5";
+  }
+}
+
+async function persistSnapshotSettings() {
+  const mode = snapshotModeRegionEl.checked ? "region" : "full";
+  const delay = Number(snapshotDelayEl.value) || 0;
+  await chrome.storage.local.set({
+    [SNAPSHOT_MODE_KEY]: mode,
+    [SNAPSHOT_DELAY_KEY]: delay,
+  });
+}
+
 function applyLogoPreview() {
   logoPreviewEl.src = customLogoDataUrl || DEFAULT_LOGO_URL;
   resetLogoBtn.hidden = !customLogoDataUrl;
@@ -162,6 +239,12 @@ async function refreshStatus() {
       setStatus(`Session in progress (${result.phase || "active"}).`);
       return;
     }
+    if (result?.snapshotActive) {
+      statusSnapshot = null;
+      showSnapshotBusy(result);
+      setStatus(`Snapshot in progress (${result.snapshotPhase || "active"}).`);
+      return;
+    }
     statusSnapshot = null;
     showIdle();
   } catch (_error) {
@@ -173,13 +256,27 @@ function showIdle() {
   clearTimer();
   startBtn.hidden = false;
   startBtn.disabled = false;
+  snapshotBtn.disabled = false;
   setOptionsDisabled(false);
+  setSnapshotControlsDisabled(false);
+  activeSessionEl.hidden = true;
+}
+
+function showSnapshotBusy(_status) {
+  clearTimer();
+  startBtn.hidden = false;
+  startBtn.disabled = true;
+  snapshotBtn.disabled = true;
+  setOptionsDisabled(false);
+  setSnapshotControlsDisabled(true);
   activeSessionEl.hidden = true;
 }
 
 function showActive(status) {
   startBtn.hidden = true;
+  snapshotBtn.disabled = true;
   setOptionsDisabled(true);
+  setSnapshotControlsDisabled(true);
   activeSessionEl.hidden = false;
   activeSessionEl.classList.toggle("is-paused", Boolean(status.paused));
 
@@ -208,6 +305,12 @@ function setOptionsDisabled(disabled) {
   chooseLogoBtn.disabled = disabled;
   resetLogoBtn.disabled = disabled;
   logoFileEl.disabled = disabled;
+}
+
+function setSnapshotControlsDisabled(disabled) {
+  snapshotModeFullEl.disabled = disabled;
+  snapshotModeRegionEl.disabled = disabled;
+  snapshotDelayEl.disabled = disabled;
 }
 
 function updateActiveTime(status) {

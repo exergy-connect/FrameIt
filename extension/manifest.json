@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "Exergy ∞ xFrame",
-  "version": "1.0.0",
-  "description": "Exergy ∞ xFrame captures a web session as an audio and video MP4. Record your browsing session with simple controls.",
+  "version": "1.0.1",
+  "description": "Exergy ∞ xFrame records a web session as MP4 and takes PNG snapshots of the visible tab.",
   "icons": {
     "16": "icons/icon16.png",
     "48": "icons/icon48.png",
@@ -19,6 +19,14 @@
   },
   "background": {
     "service_worker": "background.js"
+  },
+  "commands": {
+    "take-snapshot": {
+      "suggested_key": {
+        "default": "Alt+Shift+S"
+      },
+      "description": "Take a PNG snapshot of the visible tab"
+    }
   },
   "permissions": [
     "tabCapture",

@@ -204,6 +204,79 @@
   display: block;
 }
 
+.frameit-region {
+  position: absolute;
+  inset: 0;
+  cursor: crosshair;
+  pointer-events: auto;
+  touch-action: none;
+  user-select: none;
+}
+
+.frameit-region__hint {
+  position: absolute;
+  top: 20px;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 8px 14px;
+  border-radius: 999px;
+  font-size: 13px;
+  color: #e8eef5;
+  background: rgba(15, 20, 25, 0.92);
+  border: 1px solid rgba(197, 218, 240, 0.18);
+  pointer-events: none;
+  white-space: nowrap;
+  z-index: 2;
+}
+
+.frameit-region__shade {
+  position: absolute;
+  background: rgba(8, 12, 18, 0.45);
+  pointer-events: none;
+}
+
+.frameit-region__shade--top {
+  top: 0;
+  left: 0;
+  right: 0;
+}
+
+.frameit-region__shade--left {
+  left: 0;
+}
+
+.frameit-region__shade--right {
+  right: 0;
+}
+
+.frameit-region__shade--bottom {
+  bottom: 0;
+  left: 0;
+  right: 0;
+}
+
+.frameit-region__rect {
+  position: absolute;
+  border: 2px solid #c5daf0;
+  box-shadow: 0 0 0 1px rgba(15, 20, 25, 0.35);
+  pointer-events: none;
+  display: none;
+}
+
+.frameit-region__size {
+  position: absolute;
+  left: 50%;
+  bottom: calc(100% + 8px);
+  transform: translateX(-50%);
+  padding: 3px 8px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  color: #e8eef5;
+  background: rgba(15, 20, 25, 0.92);
+  white-space: nowrap;
+}
+
 @keyframes frameit-pulse {
   0% {
     box-shadow: 0 0 0 0 rgba(226, 85, 85, 0.55);

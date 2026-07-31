@@ -6,7 +6,7 @@
 
 Creating a video from a browser session shouldn't require a desktop screen share, a heavyweight recording suite, or a professional degree.
 
-Exergy ∞ xFrame records the current browser tab—including video and tab audio—into a shareable MP4 using simple controls. Record. Stop. Share.
+Exergy ∞ xFrame records the current browser tab—including video and tab audio—into a shareable MP4 using simple controls. It can also take a quick PNG snapshot of the visible tab. Record. Snapshot. Share.
 
 Built on standard browser capabilities, xFrame stays small, fast, and easy to understand.
 
@@ -18,7 +18,7 @@ A recording is only one materialization.
 
 The purpose of xFrame is to communicate concepts. Recording a browser session is simply the first realization of **Conceptual Twinning**—capturing intent so it can be shared, explained, and transformed.
 
-Today xFrame produces an MP4.
+Today xFrame produces an MP4—or a PNG snapshot of what you see.
 
 Tomorrow the same conceptual frame could produce:
 
@@ -37,6 +37,7 @@ It is the first conceptual twin.
 - Record the current browser tab
 - Capture tab audio together with video
 - Save directly as MP4
+- Take a PNG snapshot of the visible tab (full viewport or a selected region)
 - Customize the recording logo
 - Lightweight implementation using standard browser APIs
 - No desktop recording
@@ -89,6 +90,25 @@ A custom recording logo is stored in extension storage and reused until you rese
 Keys are ignored while typing in inputs, textareas, or contenteditable fields.
 
 Chrome only (Manifest V3). Restricted pages such as `chrome://` URLs cannot be captured.
+
+## Take a PNG snapshot
+
+1. Open the website tab you want to capture
+2. Click the Exergy ∞ xFrame toolbar icon (or press **Alt+Shift+S**)
+3. Choose **Visible tab** or **Select region**, and a delay (default 5 seconds)
+4. Click **Take snapshot** (or use the shortcut with saved preferences)
+5. After the countdown, the PNG downloads; in region mode, drag a rectangle first (Esc cancels)
+
+The file is saved as `{tab title} {YYYY-MM-DD HH_MM}.png`.
+
+### Snapshot options
+
+| Option | Default | Effect |
+| --- | --- | --- |
+| Capture | Visible tab | Full visible viewport, or drag to select a subsection |
+| Delay | 5 seconds | On-page countdown before capture (None / 3 / 5 / 10) |
+
+Preferences are stored in extension storage and reused by the **Alt+Shift+S** shortcut. Remap the shortcut under `chrome://extensions/shortcuts`. Snapshots are blocked while a recording session is active (and the reverse).
 
 ## How a session works
 

@@ -4,21 +4,30 @@ const OFFSCREEN_PATH = "offscreen.html";
 const OFFSCREEN_URL = chrome.runtime.getURL(OFFSCREEN_PATH);
 const EXTENSION_ORIGIN = chrome.runtime.getURL("/");
 const SESSION_STORAGE_KEY = "frameitSession";
+const SNAPSHOT_MODE_KEY = "snapshotMode";
+const SNAPSHOT_DELAY_KEY = "snapshotDelay";
+const DEFAULT_SNAPSHOT_MODE = "full";
+const DEFAULT_SNAPSHOT_DELAY = 5;
 
 const CONTENT_SESSION_TYPES = new Set([
   "frameit-countdown-done",
   "frameit-stop-session",
   "frameit-pause-session",
   "frameit-resume-session",
+  "frameit-snapshot-countdown-done",
+  "frameit-snapshot-selection-done",
+  "frameit-snapshot-cancel",
 ]);
 
 const EXTENSION_PAGE_TYPES = new Set([
   "frameit-start-session",
+  "frameit-start-snapshot",
   "frameit-get-status",
 ]);
 
 let session = null;
 let sessionRestorePromise = null;
+let snapshotState = null;
 
 function isExtensionPageSender(sender) {
   return typeof sender?.url === "string" && sender.url.startsWith(EXTENSION_ORIGIN);
@@ -66,6 +75,22 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     return true;
   }
 
+  if (message.type === "frameit-start-snapshot") {
+    if (fromContentScript) {
+      sendResponse({ ok: false, error: "Snapshot must come from the extension UI" });
+      return false;
+    }
+    startSnapshot({
+      mode: message.mode,
+      delay: message.delay,
+    })
+      .then(() => sendResponse({ ok: true }))
+      .catch((error) =>
+        sendResponse({ ok: false, error: String(error?.message || error) })
+      );
+    return true;
+  }
+
   if (message.type === "frameit-countdown-done") {
     onCountdownDone()
       .then(() => sendResponse({ ok: true }))
@@ -73,6 +98,62 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         sendResponse({ ok: false, error: String(error?.message || error) })
       );
     return true;
+  }
+
+  if (message.type === "frameit-snapshot-countdown-done") {
+    if (
+      fromContentScript &&
+      snapshotState &&
+      sender.tab?.id === snapshotState.tabId &&
+      snapshotState.phase === "countdown" &&
+      snapshotState.countdownResolve
+    ) {
+      const resolve = snapshotState.countdownResolve;
+      snapshotState.countdownResolve = null;
+      resolve();
+    }
+    sendResponse({ ok: true });
+    return false;
+  }
+
+  if (message.type === "frameit-snapshot-selection-done") {
+    if (
+      fromContentScript &&
+      snapshotState &&
+      sender.tab?.id === snapshotState.tabId &&
+      snapshotState.phase === "selecting" &&
+      snapshotState.selectionResolve
+    ) {
+      const resolve = snapshotState.selectionResolve;
+      snapshotState.selectionResolve = null;
+      snapshotState.selectionReject = null;
+      resolve({
+        x: Number(message.x) || 0,
+        y: Number(message.y) || 0,
+        width: Number(message.width) || 0,
+        height: Number(message.height) || 0,
+        viewportWidth: Number(message.viewportWidth) || 0,
+        viewportHeight: Number(message.viewportHeight) || 0,
+      });
+    }
+    sendResponse({ ok: true });
+    return false;
+  }
+
+  if (message.type === "frameit-snapshot-cancel") {
+    if (
+      fromContentScript &&
+      snapshotState &&
+      sender.tab?.id === snapshotState.tabId &&
+      snapshotState.selectionReject
+    ) {
+      const reject = snapshotState.selectionReject;
+      snapshotState.selectionResolve = null;
+      snapshotState.selectionReject = null;
+      reject(new Error("Snapshot cancelled"));
+    }
+    sendResponse({ ok: true });
+    return false;
   }
 
   if (message.type === "frameit-stop-session") {
@@ -118,9 +199,17 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   return false;
 });
 
+chrome.commands.onCommand.addListener((command) => {
+  if (command !== "take-snapshot") return;
+  startSnapshotFromCommand().catch(() => {});
+});
+
 chrome.tabs.onRemoved.addListener((tabId) => {
   if (session?.tabId === tabId) {
     abortSession().catch(() => {});
+  }
+  if (snapshotState?.tabId === tabId) {
+    abortSnapshot(new Error("Tab closed")).catch(() => {});
   }
 });
 
@@ -131,18 +220,40 @@ chrome.tabs.onUpdated.addListener((tabId, changeInfo) => {
   }
 });
 
-async function startSession({
-  includeLogo = true,
-  logoDataUrl = null,
-  hideControls = true,
-  includePointer = false,
-} = {}) {
-  await ensureSessionRestored();
-  if (session) {
-    throw new Error("A session is already in progress");
-  }
+async function startSnapshotFromCommand() {
+  const prefs = await loadSnapshotPrefs();
+  await startSnapshot(prefs);
+}
 
-  const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+async function loadSnapshotPrefs() {
+  try {
+    const stored = await chrome.storage.local.get([
+      SNAPSHOT_MODE_KEY,
+      SNAPSHOT_DELAY_KEY,
+    ]);
+    return {
+      mode: normalizeSnapshotMode(stored?.[SNAPSHOT_MODE_KEY]),
+      delay: normalizeSnapshotDelay(stored?.[SNAPSHOT_DELAY_KEY]),
+    };
+  } catch (_error) {
+    return {
+      mode: DEFAULT_SNAPSHOT_MODE,
+      delay: DEFAULT_SNAPSHOT_DELAY,
+    };
+  }
+}
+
+function normalizeSnapshotMode(value) {
+  return value === "region" ? "region" : DEFAULT_SNAPSHOT_MODE;
+}
+
+function normalizeSnapshotDelay(value) {
+  const n = Number(value);
+  if (!Number.isFinite(n)) return DEFAULT_SNAPSHOT_DELAY;
+  return Math.max(0, Math.min(60, Math.floor(n)));
+}
+
+function assertCapturableTab(tab) {
   if (!tab?.id) {
     throw new Error("No active tab found");
   }
@@ -154,6 +265,217 @@ async function startSession({
   ) {
     throw new Error("This page cannot be captured. Open a regular website tab.");
   }
+}
+
+async function startSnapshot({ mode, delay } = {}) {
+  await ensureSessionRestored();
+  if (session) {
+    throw new Error("Finish or stop the recording before taking a snapshot");
+  }
+  if (snapshotState) {
+    throw new Error("A snapshot is already in progress");
+  }
+
+  const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+  assertCapturableTab(tab);
+
+  const snapshotMode = normalizeSnapshotMode(mode);
+  const snapshotDelay = normalizeSnapshotDelay(delay);
+
+  snapshotState = {
+    tabId: tab.id,
+    tabTitle: tab.title || "Snapshot",
+    windowId: tab.windowId,
+    mode: snapshotMode,
+    delay: snapshotDelay,
+    phase: "starting",
+    countdownResolve: null,
+    selectionResolve: null,
+    selectionReject: null,
+  };
+
+  try {
+    if (snapshotDelay > 0 || snapshotMode === "region") {
+      await injectOverlay(tab.id);
+    }
+  } catch (error) {
+    snapshotState = null;
+    throw error;
+  }
+
+  // Run countdown → optional region → capture without blocking the popup/command.
+  runSnapshotCapture().catch(async (error) => {
+    const message = String(error?.message || error || "");
+    if (message !== "Snapshot cancelled") {
+      console.warn("Snapshot failed:", message);
+    }
+    await abortSnapshot();
+  });
+}
+
+async function runSnapshotCapture() {
+  if (!snapshotState) return;
+
+  const {
+    tabId,
+    windowId,
+    mode,
+    delay: snapshotDelay,
+    tabTitle,
+  } = snapshotState;
+
+  if (snapshotDelay > 0) {
+    snapshotState.phase = "countdown";
+    const countdownDone = new Promise((resolve) => {
+      snapshotState.countdownResolve = resolve;
+    });
+    await chrome.tabs.sendMessage(tabId, {
+      type: "frameit-show-snapshot-countdown",
+      seconds: snapshotDelay,
+      label: "Taking snapshot...",
+    });
+    await countdownDone;
+    if (!snapshotState) return;
+  }
+
+  let selection = null;
+  if (mode === "region") {
+    snapshotState.phase = "selecting";
+    const selectionDone = new Promise((resolve, reject) => {
+      snapshotState.selectionResolve = resolve;
+      snapshotState.selectionReject = reject;
+    });
+    await chrome.tabs.sendMessage(tabId, {
+      type: "frameit-start-region-select",
+    });
+    selection = await selectionDone;
+    if (!snapshotState) return;
+  }
+
+  snapshotState.phase = "capturing";
+  if (snapshotDelay > 0 || mode === "region") {
+    try {
+      await chrome.tabs.sendMessage(tabId, { type: "frameit-teardown" });
+    } catch (_error) {
+      // Overlay may already be gone.
+    }
+    await delay(120);
+  }
+
+  const dataUrl = await chrome.tabs.captureVisibleTab(windowId, {
+    format: "png",
+  });
+  if (!dataUrl) {
+    throw new Error("Failed to capture the visible tab");
+  }
+
+  let downloadUrl = dataUrl;
+  if (selection) {
+    downloadUrl = await cropPngDataUrl(dataUrl, selection);
+  }
+
+  const filename = buildFilename(tabTitle, new Date(), ".png");
+  await chrome.downloads.download({
+    url: downloadUrl,
+    filename,
+    saveAs: false,
+  });
+
+  snapshotState = null;
+}
+
+async function abortSnapshot(reason) {
+  const tabId = snapshotState?.tabId;
+  const rejectSelection = snapshotState?.selectionReject;
+  if (snapshotState) {
+    snapshotState.countdownResolve = null;
+    snapshotState.selectionResolve = null;
+    snapshotState.selectionReject = null;
+  }
+  snapshotState = null;
+
+  if (rejectSelection && reason) {
+    try {
+      rejectSelection(reason);
+    } catch (_error) {
+      // Listener may already have settled.
+    }
+  }
+
+  if (tabId != null) {
+    try {
+      await chrome.tabs.sendMessage(tabId, { type: "frameit-teardown" });
+    } catch (_error) {
+      // ignore
+    }
+  }
+}
+
+async function cropPngDataUrl(dataUrl, rect) {
+  const viewportWidth = Number(rect.viewportWidth) || 0;
+  const viewportHeight = Number(rect.viewportHeight) || 0;
+  if (viewportWidth <= 0 || viewportHeight <= 0) {
+    throw new Error("Invalid selection viewport size");
+  }
+
+  const response = await fetch(dataUrl);
+  const blob = await response.blob();
+  const bitmap = await createImageBitmap(blob);
+
+  try {
+    const scaleX = bitmap.width / viewportWidth;
+    const scaleY = bitmap.height / viewportHeight;
+    let sx = Math.round(Number(rect.x) * scaleX);
+    let sy = Math.round(Number(rect.y) * scaleY);
+    let sw = Math.round(Number(rect.width) * scaleX);
+    let sh = Math.round(Number(rect.height) * scaleY);
+
+    sx = Math.max(0, Math.min(bitmap.width - 1, sx));
+    sy = Math.max(0, Math.min(bitmap.height - 1, sy));
+    sw = Math.max(1, Math.min(bitmap.width - sx, sw));
+    sh = Math.max(1, Math.min(bitmap.height - sy, sh));
+
+    const canvas = new OffscreenCanvas(sw, sh);
+    const ctx = canvas.getContext("2d");
+    if (!ctx) {
+      throw new Error("Could not crop the snapshot");
+    }
+    ctx.drawImage(bitmap, sx, sy, sw, sh, 0, 0, sw, sh);
+    const outBlob = await canvas.convertToBlob({ type: "image/png" });
+    return blobToDataUrl(outBlob);
+  } finally {
+    bitmap.close();
+  }
+}
+
+function blobToDataUrl(blob) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      if (typeof reader.result === "string") resolve(reader.result);
+      else reject(new Error("Could not encode the snapshot"));
+    };
+    reader.onerror = () => reject(new Error("Could not encode the snapshot"));
+    reader.readAsDataURL(blob);
+  });
+}
+
+async function startSession({
+  includeLogo = true,
+  logoDataUrl = null,
+  hideControls = true,
+  includePointer = false,
+} = {}) {
+  await ensureSessionRestored();
+  if (snapshotState) {
+    throw new Error("Finish the snapshot before starting a recording");
+  }
+  if (session) {
+    throw new Error("A session is already in progress");
+  }
+
+  const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+  assertCapturableTab(tab);
 
   const tabTitle = tab.title || "Session";
   const sessionStartedAt = new Date();
@@ -322,6 +644,8 @@ async function getStatus() {
     pausedAt: session?.pausedAt || null,
     totalPausedMs: session?.totalPausedMs || 0,
     hideControls: session?.hideControls !== false,
+    snapshotActive: Boolean(snapshotState),
+    snapshotPhase: snapshotState?.phase || null,
   };
 }
 

@@ -24,6 +24,8 @@
   let sessionOptions = null;
   let guardTimerId = null;
   let remountScheduled = false;
+  let regionCleanup = null;
+  let snapshotActive = false;
 
   const ICON_PAUSE = `
     <svg class="frameit-icon" viewBox="0 0 24 24" aria-hidden="true">
@@ -48,7 +50,34 @@
     }
 
     if (message.type === "frameit-show-countdown") {
-      showCountdown()
+      showCountdown({
+        seconds: 3,
+        label: "Starting capture...",
+        doneType: "frameit-countdown-done",
+      })
+        .then(() => sendResponse({ ok: true }))
+        .catch((error) =>
+          sendResponse({ ok: false, error: String(error?.message || error) })
+        );
+      return true;
+    }
+
+    if (message.type === "frameit-show-snapshot-countdown") {
+      const seconds = Math.max(0, Math.min(60, Number(message.seconds) || 0));
+      showCountdown({
+        seconds,
+        label: message.label || "Taking snapshot...",
+        doneType: "frameit-snapshot-countdown-done",
+      })
+        .then(() => sendResponse({ ok: true }))
+        .catch((error) =>
+          sendResponse({ ok: false, error: String(error?.message || error) })
+        );
+      return true;
+    }
+
+    if (message.type === "frameit-start-region-select") {
+      showRegionSelect()
         .then(() => sendResponse({ ok: true }))
         .catch((error) =>
           sendResponse({ ok: false, error: String(error?.message || error) })
@@ -94,7 +123,7 @@
   });
 
   document.addEventListener("fullscreenchange", () => {
-    if (!sessionActive || !hostEl) return;
+    if ((!sessionActive && !snapshotActive) || !hostEl) return;
     placeHost(hostEl);
   });
 
@@ -186,12 +215,12 @@
     // Poll lightly: busy SPAs mutate constantly, and fullscreen/top-layer
     // changes can detach the host without a reliable single mutation target.
     guardTimerId = window.setInterval(() => {
-      if (!sessionActive) return;
+      if (!sessionActive && !snapshotActive) return;
       if (hostEl?.isConnected) {
         placeHost(hostEl);
         return;
       }
-      scheduleRemount();
+      if (sessionActive) scheduleRemount();
     }, 1000);
   }
 
@@ -216,16 +245,37 @@
     });
   }
 
-  async function showCountdown() {
-    sessionActive = true;
+  async function showCountdown({
+    seconds = 3,
+    label = "Starting capture...",
+    doneType = "frameit-countdown-done",
+  } = {}) {
+    const isSnapshot = doneType === "frameit-snapshot-countdown-done";
+    if (isSnapshot) snapshotActive = true;
+    else sessionActive = true;
+
     const root = await ensureRoot();
     clearShadowContent();
     clearTimer();
     stopPointer();
     unbindSessionKeys();
+    clearRegionSelect();
     sessionUi = null;
 
+    const totalSeconds = Math.max(0, Math.floor(Number(seconds) || 0));
+    if (totalSeconds <= 0) {
+      await waitFrames(2);
+      await delay(50);
+      try {
+        await chrome.runtime.sendMessage({ type: doneType });
+      } catch (_error) {
+        // Session/snapshot may have been aborted.
+      }
+      return;
+    }
+
     const logoUrl = chrome.runtime.getURL("assets/exergy_connect_logo.png");
+    const safeLabel = escapeHtml(label);
     const overlay = document.createElement("div");
     overlay.className = "frameit-countdown";
     overlay.innerHTML = `
@@ -238,40 +288,234 @@
           height="56"
         />
         <div class="frameit-countdown__brand">Exergy ∞ xFrame</div>
-        <div class="frameit-countdown__number" aria-live="polite">3</div>
-        <div class="frameit-countdown__label">Starting capture...</div>
+        <div class="frameit-countdown__number" aria-live="polite">${totalSeconds}</div>
+        <div class="frameit-countdown__label">${safeLabel}</div>
       </div>
     `;
     root.appendChild(overlay);
 
     const numberEl = overlay.querySelector(".frameit-countdown__number");
-    let count = 3;
+    let count = totalSeconds;
 
     return new Promise((resolve) => {
+      const finish = async () => {
+        overlay.remove();
+        await waitFrames(2);
+        await delay(100);
+        try {
+          await chrome.runtime.sendMessage({ type: doneType });
+        } catch (_error) {
+          // Session/snapshot may have been aborted.
+        }
+        resolve();
+      };
+
       const tick = () => {
-        if (count > 1) {
-          count -= 1;
+        count -= 1;
+        if (count > 0) {
           numberEl.textContent = String(count);
           timerId = window.setTimeout(tick, 1000);
           return;
         }
-
-        numberEl.textContent = "1";
-        window.setTimeout(async () => {
-          overlay.remove();
-          await waitFrames(2);
-          await delay(100);
-          try {
-            await chrome.runtime.sendMessage({ type: "frameit-countdown-done" });
-          } catch (_error) {
-            // Session may have been aborted.
-          }
-          resolve();
-        }, 1000);
+        finish();
       };
 
       timerId = window.setTimeout(tick, 1000);
     });
+  }
+
+  async function showRegionSelect() {
+    snapshotActive = true;
+    const root = await ensureRoot();
+    clearShadowContent();
+    clearTimer();
+    stopPointer();
+    unbindSessionKeys();
+    clearRegionSelect();
+    sessionUi = null;
+
+    const surface = document.createElement("div");
+    surface.className = "frameit-region";
+    surface.innerHTML = `
+      <div class="frameit-region__hint">Drag to select a region · Esc to cancel</div>
+      <div class="frameit-region__shade frameit-region__shade--top"></div>
+      <div class="frameit-region__shade frameit-region__shade--left"></div>
+      <div class="frameit-region__shade frameit-region__shade--right"></div>
+      <div class="frameit-region__shade frameit-region__shade--bottom"></div>
+      <div class="frameit-region__rect">
+        <div class="frameit-region__size"></div>
+      </div>
+    `;
+    root.appendChild(surface);
+
+    const shadeTop = surface.querySelector(".frameit-region__shade--top");
+    const shadeLeft = surface.querySelector(".frameit-region__shade--left");
+    const shadeRight = surface.querySelector(".frameit-region__shade--right");
+    const shadeBottom = surface.querySelector(".frameit-region__shade--bottom");
+    const rectEl = surface.querySelector(".frameit-region__rect");
+    const sizeEl = surface.querySelector(".frameit-region__size");
+    const hintEl = surface.querySelector(".frameit-region__hint");
+
+    let originX = 0;
+    let originY = 0;
+    let currentRect = null;
+    let dragging = false;
+    let finished = false;
+
+    const MIN_SIZE = 4;
+
+    function viewportSize() {
+      return {
+        viewportWidth: window.innerWidth,
+        viewportHeight: window.innerHeight,
+      };
+    }
+
+    function normalizeRect(x0, y0, x1, y1) {
+      const left = Math.min(x0, x1);
+      const top = Math.min(y0, y1);
+      const right = Math.max(x0, x1);
+      const bottom = Math.max(y0, y1);
+      return {
+        x: Math.max(0, left),
+        y: Math.max(0, top),
+        width: Math.max(0, right - left),
+        height: Math.max(0, bottom - top),
+      };
+    }
+
+    function paintRect(rect) {
+      currentRect = rect;
+      const { viewportWidth, viewportHeight } = viewportSize();
+      const hasRect = rect && rect.width > 0 && rect.height > 0;
+
+      if (!hasRect) {
+        shadeTop.style.height = `${viewportHeight}px`;
+        shadeLeft.style.cssText = "display:none";
+        shadeRight.style.cssText = "display:none";
+        shadeBottom.style.cssText = "display:none";
+        rectEl.style.display = "none";
+        return;
+      }
+
+      shadeTop.style.cssText = `height:${rect.y}px;`;
+      shadeLeft.style.cssText = `top:${rect.y}px;width:${rect.x}px;height:${rect.height}px;`;
+      shadeRight.style.cssText = `top:${rect.y}px;left:${rect.x + rect.width}px;width:${Math.max(
+        0,
+        viewportWidth - rect.x - rect.width
+      )}px;height:${rect.height}px;`;
+      shadeBottom.style.cssText = `top:${rect.y + rect.height}px;height:${Math.max(
+        0,
+        viewportHeight - rect.y - rect.height
+      )}px;`;
+      rectEl.style.cssText = `display:block;left:${rect.x}px;top:${rect.y}px;width:${rect.width}px;height:${rect.height}px;`;
+      sizeEl.textContent = `${Math.round(rect.width)} × ${Math.round(rect.height)}`;
+    }
+
+    paintRect(null);
+
+    async function finishOk(rect) {
+      if (finished) return;
+      finished = true;
+      clearRegionSelect();
+      surface.remove();
+      await waitFrames(2);
+      await delay(50);
+      try {
+        await chrome.runtime.sendMessage({
+          type: "frameit-snapshot-selection-done",
+          ...rect,
+          ...viewportSize(),
+        });
+      } catch (_error) {
+        // Snapshot may have been aborted.
+      }
+    }
+
+    async function finishCancel() {
+      if (finished) return;
+      finished = true;
+      clearRegionSelect();
+      surface.remove();
+      try {
+        await chrome.runtime.sendMessage({ type: "frameit-snapshot-cancel" });
+      } catch (_error) {
+        // Snapshot may have been aborted.
+      }
+    }
+
+    function onPointerDown(event) {
+      if (event.button !== 0 || finished) return;
+      event.preventDefault();
+      dragging = true;
+      originX = event.clientX;
+      originY = event.clientY;
+      hintEl.hidden = true;
+      paintRect(normalizeRect(originX, originY, originX, originY));
+      surface.setPointerCapture?.(event.pointerId);
+    }
+
+    function onPointerMove(event) {
+      if (!dragging || finished) return;
+      paintRect(normalizeRect(originX, originY, event.clientX, event.clientY));
+    }
+
+    function onPointerUp(event) {
+      if (!dragging || finished) return;
+      dragging = false;
+      const rect = normalizeRect(originX, originY, event.clientX, event.clientY);
+      paintRect(rect);
+      if (rect.width < MIN_SIZE || rect.height < MIN_SIZE) {
+        paintRect(null);
+        hintEl.hidden = false;
+        return;
+      }
+      finishOk(rect);
+    }
+
+    function onKeyDown(event) {
+      if (finished) return;
+      if (event.key === "Escape") {
+        event.preventDefault();
+        finishCancel();
+        return;
+      }
+      if (event.key === "Enter" && currentRect) {
+        if (currentRect.width >= MIN_SIZE && currentRect.height >= MIN_SIZE) {
+          event.preventDefault();
+          finishOk(currentRect);
+        }
+      }
+    }
+
+    surface.addEventListener("pointerdown", onPointerDown);
+    surface.addEventListener("pointermove", onPointerMove);
+    surface.addEventListener("pointerup", onPointerUp);
+    surface.addEventListener("pointercancel", onPointerUp);
+    window.addEventListener("keydown", onKeyDown, true);
+
+    regionCleanup = () => {
+      surface.removeEventListener("pointerdown", onPointerDown);
+      surface.removeEventListener("pointermove", onPointerMove);
+      surface.removeEventListener("pointerup", onPointerUp);
+      surface.removeEventListener("pointercancel", onPointerUp);
+      window.removeEventListener("keydown", onKeyDown, true);
+      regionCleanup = null;
+    };
+  }
+
+  function clearRegionSelect() {
+    if (regionCleanup) {
+      regionCleanup();
+    }
+  }
+
+  function escapeHtml(value) {
+    return String(value || "")
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;");
   }
 
   async function showSessionBar({
@@ -547,11 +791,13 @@
 
   function teardown() {
     sessionActive = false;
+    snapshotActive = false;
     sessionOptions = null;
     remountScheduled = false;
     clearTimer();
     stopPointer();
     unbindSessionKeys();
+    clearRegionSelect();
     hideNativeCursor(false);
     stopDomGuard();
     sessionUi = null;

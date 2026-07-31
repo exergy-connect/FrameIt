@@ -239,6 +239,74 @@
         padding-top: 4px;
         border-top: 1px solid var(--line);
       }
+
+      .snapshot {
+        display: grid;
+        gap: 10px;
+        padding-top: 4px;
+        border-top: 1px solid var(--line);
+      }
+
+      .snapshot__title {
+        margin: 0;
+        font-size: 13px;
+        font-weight: 650;
+      }
+
+      .snapshot__row {
+        display: grid;
+        gap: 6px;
+      }
+
+      .snapshot__label {
+        font-size: 12px;
+        color: var(--muted);
+      }
+
+      .snapshot__modes {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 8px;
+      }
+
+      .snapshot__mode {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin: 0;
+        padding: 8px 10px;
+        border-radius: 8px;
+        border: 1px solid var(--line);
+        background: rgba(197, 218, 240, 0.08);
+        font-size: 12px;
+        cursor: pointer;
+        user-select: none;
+      }
+
+      .snapshot__mode input {
+        margin: 0;
+        accent-color: var(--accent1);
+        flex-shrink: 0;
+      }
+
+      .snapshot__delay {
+        width: 100%;
+        appearance: none;
+        border-radius: 8px;
+        border: 1px solid var(--line);
+        background: rgba(197, 218, 240, 0.08);
+        color: var(--text);
+        font: inherit;
+        font-size: 13px;
+        padding: 8px 10px;
+      }
+
+      .snapshot__hint {
+        margin: 0;
+        font-size: 11px;
+        line-height: 1.4;
+        color: var(--muted);
+      }
     </style>
   </head>
   <body>
@@ -305,6 +373,49 @@
         <span>Include mouse pointer in recording</span>
       </label>
 
+      <div class="snapshot" id="snapshotPanel">
+        <p class="snapshot__title">PNG snapshot</p>
+        <div class="snapshot__row">
+          <span class="snapshot__label">Capture</span>
+          <div class="snapshot__modes">
+            <label class="snapshot__mode" for="snapshotModeFull">
+              <input
+                id="snapshotModeFull"
+                type="radio"
+                name="snapshotMode"
+                value="full"
+                checked
+              />
+              <span>Visible tab</span>
+            </label>
+            <label class="snapshot__mode" for="snapshotModeRegion">
+              <input
+                id="snapshotModeRegion"
+                type="radio"
+                name="snapshotMode"
+                value="region"
+              />
+              <span>Select region</span>
+            </label>
+          </div>
+        </div>
+        <div class="snapshot__row">
+          <label class="snapshot__label" for="snapshotDelay">Delay</label>
+          <select id="snapshotDelay" class="snapshot__delay">
+            <option value="0">None</option>
+            <option value="3">3 seconds</option>
+            <option value="5" selected>5 seconds</option>
+            <option value="10">10 seconds</option>
+          </select>
+        </div>
+        <button id="snapshot" type="button" class="secondary">
+          Take snapshot
+        </button>
+        <p class="snapshot__hint">
+          Shortcut: Alt+Shift+S (change under chrome://extensions/shortcuts)
+        </p>
+      </div>
+
       <button id="start" type="button">Start session</button>
 
       <div id="activeSession" class="active-session" hidden>
@@ -322,7 +433,7 @@
       <p class="hint">
         A 3-second countdown appears on the tab, then recording begins. If
         controls are hidden from the video, reopen this popup to pause or
-        stop &amp; save.
+        stop &amp; save. Snapshots download as PNG after the chosen delay.
       </p>
     </main>
     <script src="popup.js"></script>

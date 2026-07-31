@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- PNG snapshot of the visible tab viewport: full capture or drag-to-select region, timer delay (default 5s), popup controls, and remappable **Alt+Shift+S** shortcut (`chrome://extensions/shortcuts`).
+
 ### Fixed
 
 - Keep pause/stop available when host pages hide or remove the on-page controls (fullscreen containers, aggressive SPA DOM cleanup, and conflicting page CSS via a closed Shadow DOM overlay).
@@ -17,6 +21,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Rename the packaged Chrome extension zip artifact to include `chrome-plugin` in the filename.
 - Minor README wording updates.
+- Bump extension version to 1.0.1.
 
 ## [1.0.0] - 2026-07-28
 
