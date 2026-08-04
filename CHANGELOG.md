@@ -13,6 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Compact the toolbar popup layout so it fits without a scrollbar after the PNG snapshot controls were added.
 - Keep pause/stop available when host pages hide or remove the on-page controls (fullscreen containers, aggressive SPA DOM cleanup, and conflicting page CSS via a closed Shadow DOM overlay).
 - Remount the session overlay after navigations and when the host detaches the UI, and re-inject it when the popup checks status.
 - Persist in-flight session state across Manifest V3 service worker restarts so the toolbar popup can still pause or stop an active recording.

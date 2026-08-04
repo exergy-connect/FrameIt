@@ -22,8 +22,13 @@
         box-sizing: border-box;
       }
 
+      html,
       body {
         margin: 0;
+        overflow: hidden;
+      }
+
+      body {
         width: 320px;
         font-family: "Segoe UI", "Helvetica Neue", Helvetica, Arial, sans-serif;
         color: var(--text);
@@ -31,45 +36,45 @@
       }
 
       main {
-        padding: 16px;
+        padding: 12px 14px 14px;
         display: grid;
-        gap: 14px;
+        gap: 10px;
       }
 
       .brand {
         display: flex;
         align-items: center;
-        gap: 12px;
+        gap: 10px;
       }
 
       .brand img.logo {
-        width: 44px;
-        height: 44px;
+        width: 36px;
+        height: 36px;
         display: block;
         object-fit: cover;
       }
 
       .brand img.mark {
-        width: 28px;
-        height: 28px;
+        width: 22px;
+        height: 22px;
       }
 
       .brand-text {
         display: grid;
-        gap: 2px;
+        gap: 1px;
         min-width: 0;
       }
 
       .brand-text h1 {
         margin: 0;
-        font-size: 15px;
+        font-size: 14px;
         font-weight: 650;
         letter-spacing: 0.01em;
       }
 
       .brand-text p {
         margin: 0;
-        font-size: 12px;
+        font-size: 11px;
         color: var(--muted);
       }
 
@@ -84,10 +89,10 @@
         appearance: none;
         width: 100%;
         border: 0;
-        border-radius: 10px;
-        padding: 12px 14px;
+        border-radius: 9px;
+        padding: 9px 12px;
         font: inherit;
-        font-size: 14px;
+        font-size: 13px;
         font-weight: 650;
         cursor: pointer;
         color: var(--bg0);
@@ -112,7 +117,7 @@
 
       .active-session {
         display: grid;
-        gap: 10px;
+        gap: 8px;
       }
 
       .active-session[hidden] {
@@ -167,16 +172,16 @@
       .option {
         display: flex;
         align-items: flex-start;
-        gap: 10px;
-        font-size: 13px;
-        line-height: 1.35;
+        gap: 8px;
+        font-size: 12px;
+        line-height: 1.3;
         color: var(--text);
         cursor: pointer;
         user-select: none;
       }
 
       .option input {
-        margin: 2px 0 0;
+        margin: 1px 0 0;
         accent-color: var(--accent1);
         flex-shrink: 0;
       }
@@ -184,8 +189,8 @@
       .logo-options {
         display: flex;
         align-items: center;
-        gap: 10px;
-        margin: -4px 0 0 26px;
+        gap: 8px;
+        margin: -2px 0 0 22px;
       }
 
       .logo-options[hidden] {
@@ -193,10 +198,10 @@
       }
 
       .logo-preview {
-        width: 36px;
-        height: 36px;
+        width: 30px;
+        height: 30px;
         object-fit: contain;
-        border-radius: 6px;
+        border-radius: 5px;
         background: rgba(197, 218, 240, 0.08);
         border: 1px solid var(--line);
         flex-shrink: 0;
@@ -204,17 +209,17 @@
 
       .logo-actions {
         display: grid;
-        gap: 6px;
+        gap: 4px;
         min-width: 0;
         flex: 1;
       }
 
       .logo-actions button {
         width: 100%;
-        padding: 7px 10px;
-        font-size: 12px;
+        padding: 5px 8px;
+        font-size: 11px;
         font-weight: 600;
-        border-radius: 8px;
+        border-radius: 7px;
       }
 
       .logo-actions button:disabled {
@@ -222,8 +227,8 @@
       }
 
       .status {
-        min-height: 1.2em;
-        font-size: 12px;
+        min-height: 1em;
+        font-size: 11px;
         color: var(--muted);
       }
 
@@ -233,52 +238,52 @@
 
       .hint {
         margin: 0;
-        font-size: 12px;
-        line-height: 1.45;
+        font-size: 11px;
+        line-height: 1.35;
         color: var(--muted);
-        padding-top: 4px;
+        padding-top: 2px;
         border-top: 1px solid var(--line);
       }
 
       .snapshot {
         display: grid;
-        gap: 10px;
-        padding-top: 4px;
+        gap: 7px;
+        padding-top: 2px;
         border-top: 1px solid var(--line);
       }
 
       .snapshot__title {
         margin: 0;
-        font-size: 13px;
+        font-size: 12px;
         font-weight: 650;
       }
 
       .snapshot__row {
         display: grid;
-        gap: 6px;
+        gap: 4px;
       }
 
       .snapshot__label {
-        font-size: 12px;
+        font-size: 11px;
         color: var(--muted);
       }
 
       .snapshot__modes {
         display: grid;
         grid-template-columns: 1fr 1fr;
-        gap: 8px;
+        gap: 6px;
       }
 
       .snapshot__mode {
         display: flex;
         align-items: center;
-        gap: 8px;
+        gap: 6px;
         margin: 0;
-        padding: 8px 10px;
-        border-radius: 8px;
+        padding: 6px 8px;
+        border-radius: 7px;
         border: 1px solid var(--line);
         background: rgba(197, 218, 240, 0.08);
-        font-size: 12px;
+        font-size: 11px;
         cursor: pointer;
         user-select: none;
       }
@@ -292,19 +297,19 @@
       .snapshot__delay {
         width: 100%;
         appearance: none;
-        border-radius: 8px;
+        border-radius: 7px;
         border: 1px solid var(--line);
         background: rgba(197, 218, 240, 0.08);
         color: var(--text);
         font: inherit;
-        font-size: 13px;
-        padding: 8px 10px;
+        font-size: 12px;
+        padding: 6px 8px;
       }
 
       .snapshot__hint {
         margin: 0;
-        font-size: 11px;
-        line-height: 1.4;
+        font-size: 10px;
+        line-height: 1.35;
         color: var(--muted);
       }
     </style>
@@ -316,8 +321,8 @@
           class="logo"
           src="assets/exergy_connect_logo.png"
           alt="Exergy Connect"
-          width="44"
-          height="44"
+          width="36"
+          height="36"
         />
         <div class="brand-text">
           <h1>Exergy ∞ xFrame</h1>
@@ -328,8 +333,8 @@
             class="mark"
             src="assets/favicon.svg"
             alt=""
-            width="28"
-            height="28"
+            width="22"
+            height="22"
           />
         </div>
       </div>
@@ -344,8 +349,8 @@
           class="logo-preview"
           src="assets/exergy_connect_logo.png"
           alt="Recording logo preview"
-          width="36"
-          height="36"
+          width="30"
+          height="30"
         />
         <div class="logo-actions">
           <button id="chooseLogo" type="button" class="secondary">
@@ -432,8 +437,8 @@
       <div id="status" class="status" role="status"></div>
       <p class="hint">
         A 3-second countdown appears on the tab, then recording begins. If
-        controls are hidden from the video, reopen this popup to pause or
-        stop &amp; save. Snapshots download as PNG after the chosen delay.
+        controls are hidden, reopen this popup to pause or stop. Snapshots
+        download as PNG after the chosen delay.
       </p>
     </main>
     <script src="popup.js"></script>
