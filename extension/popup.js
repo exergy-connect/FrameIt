@@ -2,6 +2,9 @@ const DEFAULT_LOGO_URL = "assets/exergy_connect_logo.png";
 const LOGO_STORAGE_KEY = "customLogoDataUrl";
 const SNAPSHOT_MODE_KEY = "snapshotMode";
 const SNAPSHOT_DELAY_KEY = "snapshotDelay";
+const SNAPSHOT_LINKEDIN_KEY = "snapshotLinkedIn";
+const SNAPSHOT_FORMAT_KEY = "snapshotFormat";
+const SNAPSHOT_JPG_KEY = "snapshotJpg"; // legacy
 const MAX_LOGO_BYTES = 500_000;
 
 const startBtn = document.getElementById("start");
@@ -22,6 +25,10 @@ const activeTimeEl = document.getElementById("activeTime");
 const snapshotModeFullEl = document.getElementById("snapshotModeFull");
 const snapshotModeRegionEl = document.getElementById("snapshotModeRegion");
 const snapshotDelayEl = document.getElementById("snapshotDelay");
+const snapshotLinkedInEl = document.getElementById("snapshotLinkedIn");
+const snapshotFormatPngEl = document.getElementById("snapshotFormatPng");
+const snapshotFormatJpgEl = document.getElementById("snapshotFormatJpg");
+const snapshotFormatGifEl = document.getElementById("snapshotFormatGif");
 
 let timerId = null;
 let statusSnapshot = null;
@@ -72,6 +79,10 @@ logoFileEl.addEventListener("change", async () => {
 snapshotModeFullEl.addEventListener("change", persistSnapshotSettings);
 snapshotModeRegionEl.addEventListener("change", persistSnapshotSettings);
 snapshotDelayEl.addEventListener("change", persistSnapshotSettings);
+snapshotLinkedInEl.addEventListener("change", persistSnapshotSettings);
+snapshotFormatPngEl.addEventListener("change", persistSnapshotSettings);
+snapshotFormatJpgEl.addEventListener("change", persistSnapshotSettings);
+snapshotFormatGifEl.addEventListener("change", persistSnapshotSettings);
 
 startBtn.addEventListener("click", async () => {
   startBtn.disabled = true;
@@ -106,6 +117,8 @@ snapshotBtn.addEventListener("click", async () => {
 
   const mode = snapshotModeRegionEl.checked ? "region" : "full";
   const delay = Number(snapshotDelayEl.value) || 0;
+  const linkedIn = snapshotLinkedInEl.checked;
+  const format = selectedSnapshotFormat();
 
   try {
     await persistSnapshotSettings();
@@ -113,6 +126,8 @@ snapshotBtn.addEventListener("click", async () => {
       type: "frameit-start-snapshot",
       mode,
       delay,
+      linkedIn,
+      format,
     });
     if (!result?.ok) {
       throw new Error(result?.error || "Could not take snapshot");
@@ -195,6 +210,9 @@ async function initSnapshotSettings() {
     const stored = await chrome.storage.local.get([
       SNAPSHOT_MODE_KEY,
       SNAPSHOT_DELAY_KEY,
+      SNAPSHOT_LINKEDIN_KEY,
+      SNAPSHOT_FORMAT_KEY,
+      SNAPSHOT_JPG_KEY,
     ]);
     const mode = stored?.[SNAPSHOT_MODE_KEY] === "region" ? "region" : "full";
     snapshotModeFullEl.checked = mode === "full";
@@ -204,9 +222,18 @@ async function initSnapshotSettings() {
     const allowed = new Set(["0", "3", "5", "10"]);
     const delayValue = allowed.has(String(delay)) ? String(delay) : "5";
     snapshotDelayEl.value = delayValue;
+    snapshotLinkedInEl.checked = stored?.[SNAPSHOT_LINKEDIN_KEY] === true;
+    applySnapshotFormat(
+      normalizePopupSnapshotFormat(
+        stored?.[SNAPSHOT_FORMAT_KEY],
+        stored?.[SNAPSHOT_JPG_KEY]
+      )
+    );
   } catch (_error) {
     snapshotModeFullEl.checked = true;
     snapshotDelayEl.value = "5";
+    snapshotLinkedInEl.checked = false;
+    applySnapshotFormat("png");
   }
 }
 
@@ -216,7 +243,27 @@ async function persistSnapshotSettings() {
   await chrome.storage.local.set({
     [SNAPSHOT_MODE_KEY]: mode,
     [SNAPSHOT_DELAY_KEY]: delay,
+    [SNAPSHOT_LINKEDIN_KEY]: snapshotLinkedInEl.checked,
+    [SNAPSHOT_FORMAT_KEY]: selectedSnapshotFormat(),
   });
+}
+
+function selectedSnapshotFormat() {
+  if (snapshotFormatGifEl.checked) return "gif";
+  if (snapshotFormatJpgEl.checked) return "jpg";
+  return "png";
+}
+
+function applySnapshotFormat(format) {
+  snapshotFormatPngEl.checked = format === "png";
+  snapshotFormatJpgEl.checked = format === "jpg";
+  snapshotFormatGifEl.checked = format === "gif";
+}
+
+function normalizePopupSnapshotFormat(value, legacyJpg) {
+  if (value === "jpg" || value === "gif" || value === "png") return value;
+  if (legacyJpg === true) return "jpg";
+  return "png";
 }
 
 function applyLogoPreview() {
@@ -311,6 +358,10 @@ function setSnapshotControlsDisabled(disabled) {
   snapshotModeFullEl.disabled = disabled;
   snapshotModeRegionEl.disabled = disabled;
   snapshotDelayEl.disabled = disabled;
+  snapshotLinkedInEl.disabled = disabled;
+  snapshotFormatPngEl.disabled = disabled;
+  snapshotFormatJpgEl.disabled = disabled;
+  snapshotFormatGifEl.disabled = disabled;
 }
 
 function updateActiveTime(status) {

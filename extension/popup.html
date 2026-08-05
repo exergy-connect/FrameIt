@@ -274,6 +274,10 @@
         gap: 6px;
       }
 
+      .snapshot__modes--format {
+        grid-template-columns: 1fr 1fr 1fr;
+      }
+
       .snapshot__mode {
         display: flex;
         align-items: center;
@@ -379,7 +383,7 @@
       </label>
 
       <div class="snapshot" id="snapshotPanel">
-        <p class="snapshot__title">PNG snapshot</p>
+        <p class="snapshot__title">Snapshot</p>
         <div class="snapshot__row">
           <span class="snapshot__label">Capture</span>
           <div class="snapshot__modes">
@@ -413,6 +417,43 @@
             <option value="10">10 seconds</option>
           </select>
         </div>
+        <label class="option" for="snapshotLinkedIn">
+          <input id="snapshotLinkedIn" type="checkbox" />
+          <span>Optimize for LinkedIn (1280×644)</span>
+        </label>
+        <div class="snapshot__row">
+          <span class="snapshot__label">Format</span>
+          <div class="snapshot__modes snapshot__modes--format">
+            <label class="snapshot__mode" for="snapshotFormatPng">
+              <input
+                id="snapshotFormatPng"
+                type="radio"
+                name="snapshotFormat"
+                value="png"
+                checked
+              />
+              <span>PNG (best)</span>
+            </label>
+            <label class="snapshot__mode" for="snapshotFormatJpg">
+              <input
+                id="snapshotFormatJpg"
+                type="radio"
+                name="snapshotFormat"
+                value="jpg"
+              />
+              <span>JPG</span>
+            </label>
+            <label class="snapshot__mode" for="snapshotFormatGif">
+              <input
+                id="snapshotFormatGif"
+                type="radio"
+                name="snapshotFormat"
+                value="gif"
+              />
+              <span>GIF (small)</span>
+            </label>
+          </div>
+        </div>
         <button id="snapshot" type="button" class="secondary">
           Take snapshot
         </button>
@@ -438,7 +479,7 @@
       <p class="hint">
         A 3-second countdown appears on the tab, then recording begins. If
         controls are hidden, reopen this popup to pause or stop. Snapshots
-        download as PNG after the chosen delay.
+        download as PNG, JPG, or GIF after the chosen delay.
       </p>
     </main>
     <script src="popup.js"></script>

@@ -1,4 +1,4 @@
-importScripts("recordingStore.js");
+importScripts("recordingStore.js", "gifEncode.js");
 
 const OFFSCREEN_PATH = "offscreen.html";
 const OFFSCREEN_URL = chrome.runtime.getURL(OFFSCREEN_PATH);
@@ -6,8 +6,18 @@ const EXTENSION_ORIGIN = chrome.runtime.getURL("/");
 const SESSION_STORAGE_KEY = "frameitSession";
 const SNAPSHOT_MODE_KEY = "snapshotMode";
 const SNAPSHOT_DELAY_KEY = "snapshotDelay";
+const SNAPSHOT_LINKEDIN_KEY = "snapshotLinkedIn";
+const SNAPSHOT_FORMAT_KEY = "snapshotFormat";
+const SNAPSHOT_JPG_KEY = "snapshotJpg"; // legacy boolean → migrated to format
 const DEFAULT_SNAPSHOT_MODE = "full";
 const DEFAULT_SNAPSHOT_DELAY = 5;
+const DEFAULT_SNAPSHOT_LINKEDIN = false;
+const DEFAULT_SNAPSHOT_FORMAT = "png";
+/** LinkedIn feed image pixel size. */
+const LINKEDIN_WIDTH = 1280;
+const LINKEDIN_HEIGHT = 644;
+/** High-quality JPEG encode quality (0–1) for A/B tests vs PNG. */
+const JPEG_QUALITY = 0.95;
 
 const CONTENT_SESSION_TYPES = new Set([
   "frameit-countdown-done",
@@ -83,6 +93,8 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     startSnapshot({
       mode: message.mode,
       delay: message.delay,
+      linkedIn: message.linkedIn,
+      format: message.format,
     })
       .then(() => sendResponse({ ok: true }))
       .catch((error) =>
@@ -230,15 +242,25 @@ async function loadSnapshotPrefs() {
     const stored = await chrome.storage.local.get([
       SNAPSHOT_MODE_KEY,
       SNAPSHOT_DELAY_KEY,
+      SNAPSHOT_LINKEDIN_KEY,
+      SNAPSHOT_FORMAT_KEY,
+      SNAPSHOT_JPG_KEY,
     ]);
     return {
       mode: normalizeSnapshotMode(stored?.[SNAPSHOT_MODE_KEY]),
       delay: normalizeSnapshotDelay(stored?.[SNAPSHOT_DELAY_KEY]),
+      linkedIn: normalizeSnapshotLinkedIn(stored?.[SNAPSHOT_LINKEDIN_KEY]),
+      format: normalizeSnapshotFormat(
+        stored?.[SNAPSHOT_FORMAT_KEY],
+        stored?.[SNAPSHOT_JPG_KEY]
+      ),
     };
   } catch (_error) {
     return {
       mode: DEFAULT_SNAPSHOT_MODE,
       delay: DEFAULT_SNAPSHOT_DELAY,
+      linkedIn: DEFAULT_SNAPSHOT_LINKEDIN,
+      format: DEFAULT_SNAPSHOT_FORMAT,
     };
   }
 }
@@ -251,6 +273,22 @@ function normalizeSnapshotDelay(value) {
   const n = Number(value);
   if (!Number.isFinite(n)) return DEFAULT_SNAPSHOT_DELAY;
   return Math.max(0, Math.min(60, Math.floor(n)));
+}
+
+function normalizeSnapshotLinkedIn(value) {
+  return value === true;
+}
+
+function normalizeSnapshotFormat(value, legacyJpg) {
+  if (value === "jpg" || value === "gif" || value === "png") return value;
+  if (legacyJpg === true) return "jpg";
+  return DEFAULT_SNAPSHOT_FORMAT;
+}
+
+function snapshotExtensionForFormat(format) {
+  if (format === "jpg") return ".jpg";
+  if (format === "gif") return ".gif";
+  return ".png";
 }
 
 function assertCapturableTab(tab) {
@@ -267,7 +305,7 @@ function assertCapturableTab(tab) {
   }
 }
 
-async function startSnapshot({ mode, delay } = {}) {
+async function startSnapshot({ mode, delay, linkedIn, format } = {}) {
   await ensureSessionRestored();
   if (session) {
     throw new Error("Finish or stop the recording before taking a snapshot");
@@ -281,6 +319,8 @@ async function startSnapshot({ mode, delay } = {}) {
 
   const snapshotMode = normalizeSnapshotMode(mode);
   const snapshotDelay = normalizeSnapshotDelay(delay);
+  const snapshotLinkedIn = normalizeSnapshotLinkedIn(linkedIn);
+  const snapshotFormat = normalizeSnapshotFormat(format);
 
   snapshotState = {
     tabId: tab.id,
@@ -288,6 +328,8 @@ async function startSnapshot({ mode, delay } = {}) {
     windowId: tab.windowId,
     mode: snapshotMode,
     delay: snapshotDelay,
+    linkedIn: snapshotLinkedIn,
+    format: snapshotFormat,
     phase: "starting",
     countdownResolve: null,
     selectionResolve: null,
@@ -321,6 +363,8 @@ async function runSnapshotCapture() {
     windowId,
     mode,
     delay: snapshotDelay,
+    linkedIn,
+    format,
     tabTitle,
   } = snapshotState;
 
@@ -371,10 +415,22 @@ async function runSnapshotCapture() {
 
   let downloadUrl = dataUrl;
   if (selection) {
-    downloadUrl = await cropPngDataUrl(dataUrl, selection);
+    downloadUrl = await cropPngDataUrl(downloadUrl, selection);
+  }
+  if (linkedIn) {
+    downloadUrl = await optimizePngForLinkedIn(downloadUrl);
+  }
+  if (format === "jpg") {
+    downloadUrl = await encodeJpegDataUrl(downloadUrl, JPEG_QUALITY);
+  } else if (format === "gif") {
+    downloadUrl = await encodeGifDataUrl(downloadUrl);
   }
 
-  const filename = buildFilename(tabTitle, new Date(), ".png");
+  const filename = buildFilename(
+    tabTitle,
+    new Date(),
+    snapshotExtensionForFormat(format)
+  );
   await chrome.downloads.download({
     url: downloadUrl,
     filename,
@@ -408,6 +464,91 @@ async function abortSnapshot(reason) {
     } catch (_error) {
       // ignore
     }
+  }
+}
+
+/**
+ * Fit the snapshot into LinkedIn's 1280×644 frame (center cover crop).
+ */
+async function optimizePngForLinkedIn(dataUrl) {
+  const response = await fetch(dataUrl);
+  const blob = await response.blob();
+  const bitmap = await createImageBitmap(blob);
+
+  try {
+    const scale = Math.max(
+      LINKEDIN_WIDTH / bitmap.width,
+      LINKEDIN_HEIGHT / bitmap.height
+    );
+    const sw = LINKEDIN_WIDTH / scale;
+    const sh = LINKEDIN_HEIGHT / scale;
+    const sx = (bitmap.width - sw) / 2;
+    const sy = (bitmap.height - sh) / 2;
+
+    const canvas = new OffscreenCanvas(LINKEDIN_WIDTH, LINKEDIN_HEIGHT);
+    const ctx = canvas.getContext("2d");
+    if (!ctx) {
+      throw new Error("Could not optimize the snapshot for LinkedIn");
+    }
+    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = "high";
+    ctx.drawImage(bitmap, sx, sy, sw, sh, 0, 0, LINKEDIN_WIDTH, LINKEDIN_HEIGHT);
+    const outBlob = await canvas.convertToBlob({ type: "image/png" });
+    return blobToDataUrl(outBlob);
+  } finally {
+    bitmap.close();
+  }
+}
+
+async function encodeJpegDataUrl(dataUrl, quality) {
+  const response = await fetch(dataUrl);
+  const blob = await response.blob();
+  const bitmap = await createImageBitmap(blob);
+
+  try {
+    const canvas = new OffscreenCanvas(bitmap.width, bitmap.height);
+    const ctx = canvas.getContext("2d", { willReadFrequently: true });
+    if (!ctx) {
+      throw new Error("Could not encode the JPEG snapshot");
+    }
+    // JPEG has no alpha; paint an opaque backdrop first.
+    ctx.fillStyle = "#ffffff";
+    ctx.fillRect(0, 0, bitmap.width, bitmap.height);
+    ctx.drawImage(bitmap, 0, 0);
+    const q = Math.min(1, Math.max(0.5, Number(quality) || JPEG_QUALITY));
+    const outBlob = await canvas.convertToBlob({
+      type: "image/jpeg",
+      quality: q,
+    });
+    return blobToDataUrl(outBlob);
+  } finally {
+    bitmap.close();
+  }
+}
+
+async function encodeGifDataUrl(dataUrl) {
+  const response = await fetch(dataUrl);
+  const blob = await response.blob();
+  const bitmap = await createImageBitmap(blob);
+
+  try {
+    const canvas = new OffscreenCanvas(bitmap.width, bitmap.height);
+    const ctx = canvas.getContext("2d", { willReadFrequently: true });
+    if (!ctx) {
+      throw new Error("Could not encode the GIF snapshot");
+    }
+    ctx.fillStyle = "#ffffff";
+    ctx.fillRect(0, 0, bitmap.width, bitmap.height);
+    ctx.drawImage(bitmap, 0, 0);
+    const imageData = ctx.getImageData(0, 0, bitmap.width, bitmap.height);
+    const gifBytes = encodeRgbaToGif(
+      imageData.data,
+      imageData.width,
+      imageData.height
+    );
+    return blobToDataUrl(new Blob([gifBytes], { type: "image/gif" }));
+  } finally {
+    bitmap.close();
   }
 }
 

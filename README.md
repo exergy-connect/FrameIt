@@ -37,7 +37,7 @@ It is the first conceptual twin.
 - Record the current browser tab
 - Capture tab audio together with video
 - Save directly as MP4
-- Take a PNG snapshot of the visible tab (full viewport or a selected region)
+- Take a snapshot of the visible tab (full viewport or a selected region), with optional LinkedIn 1280×644 sizing and PNG/JPG/GIF output
 - Customize the recording logo
 - Lightweight implementation using standard browser APIs
 - No desktop recording
@@ -95,11 +95,11 @@ Chrome only (Manifest V3). Restricted pages such as `chrome://` URLs cannot be c
 
 1. Open the website tab you want to capture
 2. Click the Exergy ∞ xFrame toolbar icon (or press **Alt+Shift+S**)
-3. Choose **Visible tab** or **Select region**, and a delay (default 5 seconds)
+3. Choose **Visible tab** or **Select region**, a delay (default 5 seconds), and optional LinkedIn / JPG output settings
 4. Click **Take snapshot** (or use the shortcut with saved preferences)
-5. After the countdown, the PNG downloads; in region mode, drag a rectangle first (Esc cancels)
+5. After the countdown, the image downloads; in region mode, drag a rectangle first (Esc cancels)
 
-The file is saved as `{tab title} {YYYY-MM-DD HH_MM}.png`.
+The file is saved as `{tab title} {YYYY-MM-DD HH_MM}.png` (or `.jpg` / `.gif` by format).
 
 ### Snapshot options
 
@@ -107,6 +107,8 @@ The file is saved as `{tab title} {YYYY-MM-DD HH_MM}.png`.
 | --- | --- | --- |
 | Capture | Visible tab | Full visible viewport, or drag to select a subsection |
 | Delay | 5 seconds | On-page countdown before capture (None / 3 / 5 / 10) |
+| Optimize for LinkedIn | Off | Center-crops and scales to LinkedIn’s 1280×644 feed size |
+| Format | PNG | Output as PNG, JPG (95% quality), or GIF (256-color indexed) |
 
 Preferences are stored in extension storage and reused by the **Alt+Shift+S** shortcut. Remap the shortcut under `chrome://extensions/shortcuts`. Snapshots are blocked while a recording session is active (and the reverse).
 
@@ -156,6 +158,7 @@ sequenceDiagram
 ### Implementation notes
 
 - Declares `host_permissions` for `<all_urls>` so `tabCapture.getMediaStreamId` can target the active tab reliably (in addition to `activeTab` from the popup gesture).
+- LinkedIn snapshot optimization center-crops into 1280×644 after capture (and after an optional region crop). Output format can be PNG, JPG (95%), or GIF (single-frame, ≤256 colors).
 - Prefer native `MediaRecorder` MP4 (`video/mp4`). If MP4 is advertised but fails to start, or is unsupported, the extension falls back to WebM and uses a `.webm` extension.
 - Recordings move offscreen → IndexedDB → `saver.html` → `chrome.downloads` (not Base64 data URLs, and not `createObjectURL` in the service worker). The saver page revokes the temporary `blob:` URL after the download completes.
 - No npm runtime dependencies; the extension is plain HTML/CSS/JS.
